@@ -1,0 +1,22 @@
+##  RakshaWave — Smart Road Sentinel
+##  Python dependencies for the software layer
+
+# Computer vision
+opencv-python-headless>=4.9.0
+numpy>=1.26.0
+
+# Backend API / real-time transport
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+pydantic>=2.7.0
+websockets>=12.0
+
+# Sensors (real hardware mode — optional on dev machines without the boards attached)
+pyserial>=3.5
+smbus2>=0.4.3; platform_system == "Linux"
+
+# Utilities
+python-dotenv>=1.0.1
+
+# Testing
+pytest>=8.2.0

@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RakshaWave — Smart Road Sentinel</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root{
+    --navy:#0d1b3e; --navy2:#132a5e; --blue:#1a56d6; --teal:#0fb5ae; --orange:#e8792c;
+    --red:#d64545; --green:#1f9d55; --bg:#0b1222; --panel:#111a30; --panel2:#0e1729;
+    --text:#e8edf7; --muted:#93a1c2; --border:#22304f;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',Roboto,Arial,sans-serif;}
+  header{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 22px;background:linear-gradient(90deg,var(--navy),var(--navy2));
+    border-bottom:2px solid var(--blue);
+  }
+  header h1{font-size:20px;margin:0;letter-spacing:.5px;}
+  header h1 span{color:var(--orange);}
+  header .sub{color:var(--muted);font-size:12.5px;margin-top:2px;}
+  #status{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);}
+  #status .dot{width:9px;height:9px;border-radius:50%;background:var(--red);box-shadow:0 0 8px var(--red);}
+  #status.live .dot{background:var(--green);box-shadow:0 0 8px var(--green);}
+
+  .layout{display:grid;grid-template-columns:1.4fr 1fr;gap:14px;padding:14px;height:calc(100vh - 68px);}
+  @media (max-width:980px){.layout{grid-template-columns:1fr;height:auto;}}
+
+  .col{display:flex;flex-direction:column;gap:14px;min-height:0;}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;}
+  .card h2{
+    margin:0;padding:10px 14px;font-size:13px;letter-spacing:.6px;text-transform:uppercase;
+    color:var(--muted);background:var(--panel2);border-bottom:1px solid var(--border);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .card h2 .count{background:var(--blue);color:#fff;border-radius:20px;padding:1px 9px;font-size:11px;}
+
+  #map{flex:1;min-height:380px;}
+
+  .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:14px;}
+  .stat{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;}
+  .stat .v{font-size:22px;font-weight:700;color:#fff;}
+  .stat .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-top:2px;}
+
+  .list{overflow-y:auto;padding:8px;flex:1;}
+  .item{
+    display:flex;justify-content:space-between;gap:10px;padding:9px 10px;border-radius:8px;
+    background:var(--panel2);margin-bottom:7px;border-left:3px solid var(--blue);font-size:12.5px;
+  }
+  .item.pothole{border-left-color:var(--orange);}
+  .item.crack{border-left-color:var(--teal);}
+  .item.debris{border-left-color:#c9a227;}
+  .item .meta{color:var(--muted);font-size:11px;}
+  .badge{padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:600;white-space:nowrap;height:fit-content;}
+  .badge.verified{background:rgba(31,157,85,.18);color:#4ee08a;}
+  .badge.pending{background:rgba(147,161,194,.15);color:var(--muted);}
+  .badge.escalated{background:rgba(230,69,69,.2);color:#ff8080;}
+
+  .emergency-card{border-color:var(--red);}
+  .emergency-card h2{background:rgba(214,69,69,.15);color:#ff9d9d;}
+  .empty{color:var(--muted);font-size:12.5px;padding:16px;text-align:center;}
+
+  .legend{display:flex;gap:14px;padding:8px 14px;font-size:11px;color:var(--muted);border-top:1px solid var(--border);flex-wrap:wrap;}
+  .legend span{display:inline-flex;align-items:center;gap:5px;}
+  .legend i{width:9px;height:9px;border-radius:50%;display:inline-block;}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Raksha<span>Wave</span> — Smart Road Sentinel</h1>
+    <div class="sub">AI-powered road hazard detection &amp; vehicle-to-vehicle safety alert &nbsp;·&nbsp; SIH26220</div>
+  </div>
+  <div id="status"><span class="dot"></span><span id="status-text">connecting…</span></div>
+</header>
+
+<div class="layout">
+  <div class="col">
+    <div class="card" style="flex:1;">
+      <h2>Live Vehicle &amp; Hazard Map</h2>
+      <div id="map"></div>
+      <div class="legend">
+        <span><i style="background:#1a56d6"></i> Vehicle</span>
+        <span><i style="background:#e8792c"></i> Pothole</span>
+        <span><i style="background:#0fb5ae"></i> Crack</span>
+        <span><i style="background:#c9a227"></i> Debris</span>
+        <span><i style="background:#d64545"></i> Emergency cluster</span>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Fleet Stats</h2>
+      <div class="stats-row">
+        <div class="stat"><div class="v" id="stat-vehicles">–</div><div class="l">Active Vehicles</div></div>
+        <div class="stat"><div class="v" id="stat-packets">–</div><div class="l">Packets on Mesh</div></div>
+        <div class="stat"><div class="v" id="stat-verified">–</div><div class="l">Verified Hazards</div></div>
+        <div class="stat"><div class="v" id="stat-ticks">–</div><div class="l">Sim Ticks</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="card emergency-card" style="flex:0 0 auto;max-height:220px;">
+      <h2>Emergency Response <span class="count" id="count-emergency">0</span></h2>
+      <div class="list" id="list-emergency"><div class="empty">No emergencies — all clear.</div></div>
+    </div>
+    <div class="card" style="flex:1;">
+      <h2>Hazard Clusters (Multi-Vehicle Verified) <span class="count" id="count-clusters">0</span></h2>
+      <div class="list" id="list-clusters"><div class="empty">Waiting for corroborated reports…</div></div>
+    </div>
+    <div class="card" style="flex:1;">
+      <h2>Recent Hazard Alerts <span class="count" id="count-events">0</span></h2>
+      <div class="list" id="list-events"><div class="empty">Waiting for hazard alerts…</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_BASE = location.origin;
+const WS_URL = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws/fleet";
+
+const map = L.map('map', { zoomControl: true }).setView([18.5204, 73.8567], 14);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 19
+}).addTo(map);
+
+const vehicleMarkers = {};
+const hazardMarkers = [];
+const hazardColors = { pothole:'#e8792c', crack:'#0fb5ae', debris:'#c9a227', unknown_hazard:'#93a1c2' };
+
+function vehicleIcon(){
+  return L.divIcon({ className:'', html:'<div style="width:14px;height:14px;border-radius:50%;background:#1a56d6;border:2px solid #fff;box-shadow:0 0 6px #1a56d6"></div>', iconSize:[14,14] });
+}
+
+function upsertVehicle(v){
+  const latlng = [v.lat, v.lon];
+  if (vehicleMarkers[v.vehicle_id]) {
+    vehicleMarkers[v.vehicle_id].setLatLng(latlng);
+    vehicleMarkers[v.vehicle_id].setPopupContent(`<b>${v.vehicle_id}</b><br>${v.speed_kmh} km/h`);
+  } else {
+    vehicleMarkers[v.vehicle_id] = L.marker(latlng, { icon: vehicleIcon() })
+      .bindPopup(`<b>${v.vehicle_id}</b><br>${v.speed_kmh} km/h`)
+      .addTo(map);
+  }
+}
+
+function redrawHazardClusters(clusters){
+  hazardMarkers.forEach(m => map.removeLayer(m));
+  hazardMarkers.length = 0;
+  clusters.forEach(c => {
+    const color = c.escalated ? '#d64545' : (hazardColors[c.hazard_type] || '#93a1c2');
+    const marker = L.circle([c.lat, c.lon], {
+      radius: 35, color, fillColor: color, fillOpacity: 0.35, weight: 2
+    }).bindPopup(`<b>${c.hazard_type}</b><br>${c.report_count} report(s)<br>Confidence: ${(c.max_confidence*100).toFixed(0)}%${c.escalated ? '<br><b style="color:#ff8080">ESCALATED</b>' : ''}`);
+    marker.addTo(map);
+    hazardMarkers.push(marker);
+  });
+}
+
+function fmtAgo(ts){
+  const s = Math.max(0, Math.round(Date.now()/1000 - ts));
+  if (s < 60) return s + 's ago';
+  return Math.round(s/60) + 'm ago';
+}
+
+function renderEvents(events){
+  const el = document.getElementById('list-events');
+  document.getElementById('count-events').textContent = events.length;
+  if (!events.length){ el.innerHTML = '<div class="empty">Waiting for hazard alerts…</div>'; return; }
+  el.innerHTML = events.slice().reverse().map(e => `
+    <div class="item ${e.hazard_type}">
+      <div>
+        <div><b>${e.hazard_type.toUpperCase()}</b> · ${e.vehicle_id}</div>
+        <div class="meta">${fmtAgo(e.created_at)} · conf ${(e.fused_confidence*100).toFixed(0)}%</div>
+      </div>
+      <span class="badge ${e.verified ? 'verified' : 'pending'}">${e.verified ? 'VERIFIED' : 'PENDING'}</span>
+    </div>`).join('');
+}
+
+function renderClusters(clusters){
+  const el = document.getElementById('list-clusters');
+  document.getElementById('count-clusters').textContent = clusters.length;
+  if (!clusters.length){ el.innerHTML = '<div class="empty">Waiting for corroborated reports…</div>'; return; }
+  el.innerHTML = clusters.slice().reverse().map(c => `
+    <div class="item ${c.hazard_type}">
+      <div>
+        <div><b>${c.hazard_type.toUpperCase()}</b> · ${c.cluster_id}</div>
+        <div class="meta">${c.corroborating_vehicles.length} vehicle(s) · ${c.report_count} reports</div>
+      </div>
+      <span class="badge ${c.escalated ? 'escalated' : 'pending'}">${c.escalated ? 'ESCALATED' : 'BUILDING'}</span>
+    </div>`).join('');
+}
+
+function renderEmergencies(list){
+  const el = document.getElementById('list-emergency');
+  document.getElementById('count-emergency').textContent = list.length;
+  if (!list.length){ el.innerHTML = '<div class="empty">No emergencies — all clear.</div>'; return; }
+  el.innerHTML = list.slice().reverse().map(e => `
+    <div class="item" style="border-left-color:#d64545">
+      <div>
+        <div><b>${e.hazard_type.toUpperCase()}</b> · ${e.cluster_id}</div>
+        <div class="meta">Confirmed by ${e.corroborating_vehicles.join(', ')}</div>
+      </div>
+      <span class="badge escalated">EMERGENCY</span>
+    </div>`).join('');
+}
+
+function renderStats(stats){
+  document.getElementById('stat-vehicles').textContent = stats.active_vehicles ?? '–';
+  document.getElementById('stat-packets').textContent = stats.packets_on_air ?? '–';
+  document.getElementById('stat-verified').textContent = stats.verified_events ?? '–';
+  document.getElementById('stat-ticks').textContent = stats.tick_count ?? '–';
+}
+
+function applySnapshot(snap){
+  (snap.vehicles || []).forEach(upsertVehicle);
+  redrawHazardClusters(snap.clusters || []);
+  renderEvents(snap.recent_events || []);
+  renderClusters(snap.clusters || []);
+  renderEmergencies(snap.emergencies || []);
+  renderStats(snap.stats || {});
+}
+
+function setStatus(live){
+  const box = document.getElementById('status');
+  const text = document.getElementById('status-text');
+  box.classList.toggle('live', live);
+  text.textContent = live ? 'live — mesh online' : 'disconnected — retrying…';
+}
+
+let socket;
+function connect(){
+  socket = new WebSocket(WS_URL);
+  socket.onopen = () => setStatus(true);
+  socket.onclose = () => { setStatus(false); setTimeout(connect, 2000); };
+  socket.onerror = () => socket.close();
+  socket.onmessage = (ev) => applySnapshot(JSON.parse(ev.data));
+}
+
+// Fallback to REST polling if WebSocket can't connect (e.g. static hosting).
+async function pollFallback(){
+  try {
+    const res = await fetch(API_BASE + '/api/fleet');
+    if (res.ok) { applySnapshot(await res.json()); setStatus(true); }
+  } catch (e) { setStatus(false); }
+}
+
+try {
+  connect();
+} catch (e) {
+  setInterval(pollFallback, 2000);
+  pollFallback();
+}
+</script>
+</body>
+</html>
