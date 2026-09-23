@@ -112,7 +112,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
 # Option A — one command (venv + install + run):
-./scripts/run_demo.sh
+./scripts/run_demo.ps1
 
 # Option B — manual:
 uvicorn software.api.server:app --reload --port 8000
