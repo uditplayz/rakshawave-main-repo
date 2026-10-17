@@ -4,13 +4,6 @@
 
 AI-powered road-hazard detection with secure, trust-scored vehicle-to-vehicle (V2V) alerts over LoRa. Every vehicle becomes both a sensor and a warning system, and it keeps working with no cellular network.
 
-| | |
-|---|---|
-| **Event** | Smart India Hackathon 2026 |
-| **Problem Statement** | SIH26220 — *Student Innovation: Creating intelligent devices to improve communication in vehicle safety* |
-| **Theme / Category** | Smart Vehicles · Software + Hardware |
-| **Team** | TechLads |
-
 ---
 
 ## Why this matters
@@ -213,4 +206,4 @@ pytest    # unit tests for fusion, WiMesh protocol, mesh clustering, emergency e
 
 ---
 
-<sub>Built by **Team TechLads** for Smart India Hackathon 2026.</sub>
+<sub>Built by **Team TechLads**.</sub>
