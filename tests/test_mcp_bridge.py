@@ -1,0 +1,82 @@
+import pytest
+
+from software import mcp_bridge as bridge
+
+ESP32_LINE = (
+    '{"id":"123456-VEH-ESP32-01","t":"HAZARD_ALERT","veh":"VEH-ESP32-01","hz":"unknown_hazard",'
+    '"c":0.85,"lat":18.5204,"lon":73.8567,"spd":41.7,"hop":0,"mh":5,"ttl":30.0,"oid":null,"ts":123.456}'
+)
+
+
+@pytest.fixture(autouse=True)
+def fresh_bench():
+    bridge.reset_bench()
+    yield
+    bridge.reset_bench()
+
+
+def test_synthetic_pothole_is_detected():
+    result = bridge.run_vision_detector("pothole")
+    assert result["detected"] and result["hazard_type"] == "pothole"
+    assert 0.45 <= result["confidence"] <= 1.0
+    assert result["circularity"] > 0.35
+
+
+def test_unknown_synthetic_type_is_an_error():
+    assert bridge.run_vision_detector("nonsense")["ok"] is False
+
+
+def test_esp32_packet_is_fused_and_broadcast_once():
+    bridge.run_vision_detector("pothole")
+    result = bridge.fuse_and_ingest_esp32_serial("MPU6050 ok\n" + ESP32_LINE, 0.88)
+
+    assert result["verified"] is True
+    assert result["broadcast"]["hazard_type"] == "pothole"
+    assert result["broadcast"]["transmissions"] == 1
+    assert result["clusters"][0]["escalated"] is False  # one vehicle is never enough
+
+
+def test_low_vision_confidence_is_not_broadcast():
+    result = bridge.fuse_and_ingest_esp32_serial(ESP32_LINE.replace('"c":0.85', '"c":0.5'), 0.0)
+    assert result["verified"] is False
+    assert "broadcast" not in result
+
+
+def test_peer_12m_away_escalates_cluster_within_40m():
+    bridge.run_vision_detector("pothole")
+    bridge.fuse_and_ingest_esp32_serial(ESP32_LINE, 0.88)
+    peer = bridge.simulate_corroborating_peer("VEH-002", "pothole", 18.5204, 73.8567, 12)
+
+    assert peer["distance_to_reported_m"] == pytest.approx(12, abs=0.1)
+    cluster = peer["clusters"][0]
+    assert cluster["cluster_id"] == "CL-0001"
+    assert cluster["escalated"] is True
+    assert cluster["corroborating_vehicles"] == ["VEH-002", "VEH-ESP32-01"]
+
+
+def test_peer_beyond_40m_does_not_join_the_cluster():
+    bridge.run_vision_detector("pothole")
+    bridge.fuse_and_ingest_esp32_serial(ESP32_LINE, 0.88)
+    peer = bridge.simulate_corroborating_peer("VEH-002", "pothole", 18.5204, 73.8567, 60)
+
+    assert len(peer["clusters"]) == 2
+    assert all(not c["escalated"] for c in peer["clusters"])
+
+
+def test_dedup_and_hop_cap_across_a_relay_chain():
+    bridge.add_relay_nodes(8, 1000, 18.5204, 73.8567)
+    bridge.fuse_and_ingest_esp32_serial(ESP32_LINE, 0.88)
+    state = bridge.get_mesh_state()
+
+    packet = state["packets"]["123456-VEH-ESP32-01"]
+    assert state["max_hop_observed"] == 5
+    assert all(count == 1 for count in packet["hops"].values())  # one transmission per hop
+    assert packet["storm_free"] is True
+
+
+def test_mcp_server_registers_all_tools():
+    import asyncio
+
+    tools = asyncio.run(bridge.build_server().list_tools())
+    names = {t.name for t in tools}
+    assert {"run_vision_detector", "fuse_and_ingest_esp32_serial", "simulate_corroborating_peer", "get_mesh_state"} <= names

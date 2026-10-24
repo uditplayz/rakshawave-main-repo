@@ -1,0 +1,6 @@
+{
+  "name": "GPS NMEA",
+  "author": "RakshaWave",
+  "pins": ["VCC", "GND", "TX", "RX"],
+  "controls": []
+}

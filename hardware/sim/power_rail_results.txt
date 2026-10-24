@@ -1,0 +1,15 @@
+4.2 = 4.200000e+00
+vout_min = 3.268747e+00
+vout_end = 3.300000e+00
+vina_min = 4.149469e+00
+vbat_min = 4.178536e+00
+3.6 = 3.600000e+00
+vout_min = 3.268766e+00
+vout_end = 3.300000e+00
+vina_min = 3.546008e+00
+vbat_min = 3.574917e+00
+3.0 = 3.000000e+00
+vout_min = 3.268766e+00
+vout_end = 3.300000e+00
+vina_min = 2.941128e+00
+vbat_min = 2.969811e+00

@@ -1,0 +1,50 @@
+# Wokwi automation scenario:
+#   wokwi-cli --scenario tests/wokwi/hil.test.yaml --serial-log-file serial.log .
+# (needs WOKWI_CLI_TOKEN in the environment)
+name: RakshaWave HIL - pothole impact over LoRa
+version: 1
+steps:
+  - wait-serial: 'OLED ok'
+  - wait-serial: 'MPU6050 ok'
+  - wait-serial: 'LoRa ok'
+  - wait-serial: 'RakshaWave node online.'
+  # Let the custom GPS chip send a few $GPGGA/$GPRMC pairs (8 sats, HDOP 1.1).
+  - delay: 3000ms
+  # Impact threshold is |mag - 1.0| >= 1.8 g, so the spike must be >= 2.8 g
+  # (a 2.4 g spike only gives 1.4 g of delta and does NOT trigger the firmware).
+  # A pothole hit is momentary: raise to 3.0 g, wait for the alert packet on USB serial, drop back to 1 g.
+  # (wait-serial only sees output that arrives after it starts, so it must directly
+  # follow the stimulus.)
+  - set-control:
+      part-id: imu
+      name: accelZ
+      value: 3.0
+  - wait-serial: '"t":"HAZARD_ALERT"'
+  - set-control:
+      part-id: imu
+      name: accelZ
+      value: 1.0
+  # The packet is printed just before alertOn() drives the pins and updates the OLED.
+  - delay: 200ms
+  # Buzzer (IO9) and LED (IO10) are active low while the alert is shown.
+  - expect-pin:
+      part-id: esp
+      name: 9
+      value: 0
+  - expect-pin:
+      part-id: esp
+      name: 10
+      value: 0
+  - take-screenshot:
+      part-id: oled
+      save-to: '../../hardware/oled_alert.png'
+  # Alert output switches off again after ~1.5 s.
+  - delay: 2000ms
+  - expect-pin:
+      part-id: esp
+      name: 9
+      value: 1
+  - expect-pin:
+      part-id: esp
+      name: 10
+      value: 1

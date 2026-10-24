@@ -77,3 +77,28 @@ def test_cluster_verifier_keeps_distant_reports_separate():
     c2 = verifier.ingest(far)
 
     assert c1.cluster_id != c2.cluster_id
+
+
+ESP32_LINE = (
+    b'{"id":"123456-VEH-ESP32-01","t":"HAZARD_ALERT","veh":"VEH-ESP32-01","hz":"unknown_hazard",'
+    b'"c":0.85,"lat":18.5204,"lon":73.8567,"spd":42.0,"hop":0,"mh":5,"ttl":30.0,"oid":null,"ts":123.456}'
+)
+
+
+def test_esp32_relative_ttl_is_rebased_to_wall_clock():
+    import time
+
+    before = time.time()
+    packet = HazardAlertPacket.decode(ESP32_LINE)
+
+    assert packet.is_expired() is False
+    assert before + 29.0 <= packet.ttl_expires_at <= time.time() + 30.0
+    assert packet.created_at >= before  # uptime "ts" is restamped
+    assert packet.can_relay() is True
+
+
+def test_absolute_epoch_ttl_is_left_untouched():
+    packet = make_packet()
+    decoded = HazardAlertPacket.decode(packet.encode())
+
+    assert abs(decoded.ttl_expires_at - packet.ttl_expires_at) < 0.1
