@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>RakshaWave — Mobile</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --bg-primary: #0B0F19;
+    --bg-secondary: #151922;
+    --bg-card: #1A1F2E;
+    --accent-orange: #FF6B35;
+    --accent-red: #E63946;
+    --accent-blue: #4A90E2;
+    --accent-green: #06D6A0;
+    --text-primary: #FFFFFF;
+    --text-secondary: #A0A8B8;
+    --text-muted: #6B7280;
+    --border: #2A2F3E;
+    --shadow: rgba(0, 0, 0, 0.3);
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    height: 100vh;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Status Bar */
+  .status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .status-bar .time {
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .status-bar .indicators {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  .status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent-green);
+    box-shadow: 0 0 8px var(--accent-green);
+  }
+
+  .status-dot.offline {
+    background: var(--accent-red);
+    box-shadow: 0 0 8px var(--accent-red);
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: var(--bg-secondary);
+  }
+
+  .header h1 {
+    font-size: 24px;
+    font-weight: 700;
+  }
+
+  .header h1 .wave {
+    color: var(--accent-orange);
+  }
+
+  .header .subtitle {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  .header-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--bg-card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    border: 1px solid var(--border);
+  }
+
+  /* Main Content */
+  .main-content {
+    height: calc(100vh - 120px);
+    overflow-y: auto;
+    padding-bottom: 80px;
+  }
+
+  .screen {
+    display: none;
+    animation: fadeIn 0.3s ease;
+  }
+
+  .screen.active {
+    display: block;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Stats Grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    padding: 16px 20px;
+  }
+
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+  }
+
+  .stat-card .value {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .stat-card .label {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .stat-card.active-vehicles .value { color: var(--accent-blue); }
+  .stat-card.verified .value { color: var(--accent-green); }
+  .stat-card.pending .value { color: var(--accent-orange); }
+  .stat-card.emergency .value { color: var(--accent-red); }
+
+  /* Section Header */
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 20px 12px;
+  }
+
+  .section-header h2 {
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  .section-header .view-all {
+    font-size: 13px;
+    color: var(--accent-blue);
+    text-decoration: none;
+  }
+
+  /* Hazard Cards */
+  .hazard-list {
+    padding: 0 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .hazard-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    border-left: 4px solid var(--accent-orange);
+    position: relative;
+  }
+
+  .hazard-card.pothole { border-left-color: var(--accent-orange); }
+  .hazard-card.crack { border-left-color: var(--accent-blue); }
+  .hazard-card.debris { border-left-color: #F4A261; }
+  .hazard-card.emergency { border-left-color: var(--accent-red); }
+
+  .hazard-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+  }
+
+  .hazard-type {
+    font-size: 16px;
+    font-weight: 600;
+    text-transform: capitalize;
+  }
+
+  .hazard-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .hazard-badge.verified {
+    background: rgba(6, 214, 160, 0.2);
+    color: var(--accent-green);
+  }
+
+  .hazard-badge.pending {
+    background: rgba(255, 107, 53, 0.2);
+    color: var(--accent-orange);
+  }
+
+  .hazard-badge.escalated {
+    background: rgba(230, 57, 70, 0.2);
+    color: var(--accent-red);
+  }
+
+  .hazard-meta {
+    display: flex;
+    gap: 16px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+  }
+
+  .hazard-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .hazard-location {
+    font-size: 13px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* Map Container */
+  #map-full {
+    height: calc(100vh - 180px);
+    width: 100%;
+  }
+
+  .map-controls {
+    position: absolute;
+    top: 80px;
+    right: 20px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .map-control-btn {
+    width: 44px;
+    height: 44px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    box-shadow: 0 4px 12px var(--shadow);
+  }
+
+  /* Alert Detail */
+  .detail-hero {
+    height: 200px;
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-card) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .detail-hero-icon {
+    font-size: 64px;
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
+  }
+
+  .detail-back {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    width: 40px;
+    height: 40px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+  }
+
+  .detail-content {
+    padding: 20px;
+  }
+
+  .detail-title {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .detail-info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin: 20px 0;
+  }
+
+  .detail-info-item {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+  }
+
+  .detail-info-item .label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .detail-info-item .value {
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .action-button {
+    width: 100%;
+    padding: 16px;
+    background: var(--accent-blue);
+    border: none;
+    border-radius: 12px;
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    margin-top: 20px;
+  }
+
+  .action-button.secondary {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+  }
+
+  /* Bottom Navigation */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 70px;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 0 20px;
+    z-index: 1000;
+  }
+
+  .nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 16px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .nav-item.active {
+    color: var(--accent-orange);
+  }
+
+  .nav-item .icon {
+    font-size: 24px;
+  }
+
+  .nav-item .label {
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  /* Empty State */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 40px;
+    text-align: center;
+  }
+
+  .empty-state-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+    opacity: 0.3;
+  }
+
+  .empty-state-text {
+    font-size: 16px;
+    color: var(--text-muted);
+  }
+
+  /* Loading State */
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+  }
+
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent-orange);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Scrollbar */
+  .main-content::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .main-content::-webkit-scrollbar-track {
+    background: var(--bg-primary);
+  }
+
+  .main-content::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 2px;
+  }
+</style>
+</head>
+<body>
+
+<!-- Status Bar -->
+<div class="status-bar">
+  <div class="time" id="current-time">9:41</div>
+  <div class="indicators">
+    <div class="status-indicator">
+      <div class="status-dot" id="connection-dot"></div>
+      <span id="connection-text">Live</span>
+    </div>
+  </div>
+</div>
+
+<!-- Header -->
+<div class="header">
+  <div>
+    <h1>Raksha<span class="wave">Wave</span></h1>
+    <div class="subtitle">Road Safety Alert System</div>
+  </div>
+  <div class="header-icon">🛡️</div>
+</div>
+
+<!-- Main Content Area -->
+<div class="main-content">
+
+  <!-- HOME SCREEN -->
+  <div class="screen active" id="screen-home">
+    <!-- Stats -->
+    <div class="stats-grid">
+      <div class="stat-card active-vehicles">
+        <div class="value" id="stat-vehicles-home">-</div>
+        <div class="label">Active Vehicles</div>
+      </div>
+      <div class="stat-card verified">
+        <div class="value" id="stat-verified-home">-</div>
+        <div class="label">Verified Hazards</div>
+      </div>
+      <div class="stat-card pending">
+        <div class="value" id="stat-pending-home">-</div>
+        <div class="label">Pending Reports</div>
+      </div>
+      <div class="stat-card emergency">
+        <div class="value" id="stat-emergency-home">-</div>
+        <div class="label">Emergencies</div>
+      </div>
+    </div>
+
+    <!-- Recent Hazards -->
+    <div class="section-header">
+      <h2>Recent Hazards</h2>
+      <a href="#" class="view-all" onclick="switchScreen('alerts'); return false;">View All</a>
+    </div>
+    <div class="hazard-list" id="recent-hazards-list">
+      <div class="loading"><div class="spinner"></div></div>
+    </div>
+  </div>
+
+  <!-- MAP SCREEN -->
+  <div class="screen" id="screen-map">
+    <div id="map-full"></div>
+    <div class="map-controls">
+      <button class="map-control-btn" onclick="map.setView([18.5204, 73.8567], 14)">📍</button>
+      <button class="map-control-btn" onclick="map.zoomIn()">➕</button>
+      <button class="map-control-btn" onclick="map.zoomOut()">➖</button>
+    </div>
+  </div>
+
+  <!-- ALERTS SCREEN -->
+  <div class="screen" id="screen-alerts">
+    <div class="section-header">
+      <h2>All Hazard Alerts</h2>
+      <span class="view-all" id="alert-count">0 alerts</span>
+    </div>
+    <div class="hazard-list" id="all-alerts-list">
+      <div class="loading"><div class="spinner"></div></div>
+    </div>
+  </div>
+
+  <!-- PROFILE SCREEN -->
+  <div class="screen" id="screen-profile">
+    <div class="detail-content">
+      <div class="detail-title">System Information</div>
+
+      <div class="detail-info-grid">
+        <div class="detail-info-item">
+          <div class="label">Connection</div>
+          <div class="value" id="profile-connection">WebSocket</div>
+        </div>
+        <div class="detail-info-item">
+          <div class="label">Packets</div>
+          <div class="value" id="profile-packets">-</div>
+        </div>
+        <div class="detail-info-item">
+          <div class="label">Sim Ticks</div>
+          <div class="value" id="profile-ticks">-</div>
+        </div>
+        <div class="detail-info-item">
+          <div class="label">Clusters</div>
+          <div class="value" id="profile-clusters">-</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 30px;">
+        <h3 style="font-size: 16px; margin-bottom: 12px;">About</h3>
+        <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.6;">
+          RakshaWave is an AI-powered road hazard detection and vehicle-to-vehicle safety alert system.
+          It uses real-time data from connected vehicles to identify and verify road hazards.
+        </p>
+      </div>
+
+      <button class="action-button" onclick="location.reload()">
+        Refresh Connection
+      </button>
+
+      <button class="action-button secondary" onclick="alert('Settings coming soon!')">
+        Settings
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Bottom Navigation -->
+<nav class="bottom-nav">
+  <a href="#" class="nav-item active" data-screen="home" onclick="switchScreen('home'); return false;">
+    <div class="icon">🏠</div>
+    <div class="label">Home</div>
+  </a>
+  <a href="#" class="nav-item" data-screen="map" onclick="switchScreen('map'); return false;">
+    <div class="icon">🗺️</div>
+    <div class="label">Map</div>
+  </a>
+  <a href="#" class="nav-item" data-screen="alerts" onclick="switchScreen('alerts'); return false;">
+    <div class="icon">⚠️</div>
+    <div class="label">Alerts</div>
+  </a>
+  <a href="#" class="nav-item" data-screen="profile" onclick="switchScreen('profile'); return false;">
+    <div class="icon">👤</div>
+    <div class="label">Profile</div>
+  </a>
+</nav>
+
+<script>
+// Constants
+const API_BASE = location.origin;
+const WS_URL = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws/fleet";
+
+// Global State
+let map;
+let vehicleMarkers = {};
+let hazardMarkers = [];
+let allEvents = [];
+let allClusters = [];
+let emergencies = [];
+let stats = {};
+
+const hazardColors = {
+  pothole: '#FF6B35',
+  crack: '#4A90E2',
+  debris: '#F4A261',
+  unknown_hazard: '#A0A8B8'
+};
+
+// Initialize
+function init() {
+  updateTime();
+  setInterval(updateTime, 1000);
+  initMap();
+  connectWebSocket();
+}
+
+function updateTime() {
+  const now = new Date();
+  const hours = now.getHours().toString().padStart(2, '0');
+  const minutes = now.getMinutes().toString().padStart(2, '0');
+  document.getElementById('current-time').textContent = `${hours}:${minutes}`;
+}
+
+// Navigation
+function switchScreen(screenName) {
+  // Hide all screens
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+
+  // Show selected screen
+  document.getElementById(`screen-${screenName}`).classList.add('active');
+
+  // Update nav
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.classList.toggle('active', item.dataset.screen === screenName);
+  });
+
+  // Initialize map when switching to map screen
+  if (screenName === 'map' && map) {
+    setTimeout(() => map.invalidateSize(), 100);
+  }
+}
+
+// Map Setup
+function initMap() {
+  map = L.map('map-full', { zoomControl: false }).setView([18.5204, 73.8567], 14);
+
+  const CARTO_API_KEY = 'cb1_4tf0_1_60a232ad5797eee68feae3f7';
+  L.tileLayer(`https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?api_key=${CARTO_API_KEY}`, {
+    attribution: '&copy; OpenStreetMap &copy; CARTO',
+    maxZoom: 19
+  }).addTo(map);
+}
+
+function vehicleIcon() {
+  return L.divIcon({
+    className: '',
+    html: '<div style="width:14px;height:14px;border-radius:50%;background:#4A90E2;border:2px solid #fff;box-shadow:0 0 6px #4A90E2"></div>',
+    iconSize: [14, 14]
+  });
+}
+
+function upsertVehicle(v) {
+  if (!map) return;
+  const latlng = [v.lat, v.lon];
+  if (vehicleMarkers[v.vehicle_id]) {
+    vehicleMarkers[v.vehicle_id].setLatLng(latlng);
+    vehicleMarkers[v.vehicle_id].setPopupContent(`<b>${v.vehicle_id}</b><br>${v.speed_kmh} km/h`);
+  } else {
+    vehicleMarkers[v.vehicle_id] = L.marker(latlng, { icon: vehicleIcon() })
+      .bindPopup(`<b>${v.vehicle_id}</b><br>${v.speed_kmh} km/h`)
+      .addTo(map);
+  }
+}
+
+function redrawHazardClusters(clusters) {
+  if (!map) return;
+  hazardMarkers.forEach(m => map.removeLayer(m));
+  hazardMarkers.length = 0;
+
+  clusters.forEach(c => {
+    const color = c.escalated ? '#E63946' : (hazardColors[c.hazard_type] || '#A0A8B8');
+    const marker = L.circle([c.lat, c.lon], {
+      radius: 35,
+      color: color,
+      fillColor: color,
+      fillOpacity: 0.35,
+      weight: 2
+    }).bindPopup(`<b>${c.hazard_type}</b><br>${c.report_count} report(s)<br>Confidence: ${(c.max_confidence * 100).toFixed(0)}%${c.escalated ? '<br><b style="color:#ff8080">ESCALATED</b>' : ''}`);
+    marker.addTo(map);
+    hazardMarkers.push(marker);
+  });
+}
+
+// Formatting Helpers
+function fmtAgo(ts) {
+  const s = Math.max(0, Math.round(Date.now() / 1000 - ts));
+  if (s < 60) return s + 's ago';
+  if (s < 3600) return Math.round(s / 60) + 'm ago';
+  return Math.round(s / 3600) + 'h ago';
+}
+
+function fmtLocation(lat, lon) {
+  return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+}
+
+// Render Functions
+function renderHazardCard(event, isCluster = false) {
+  const badge = event.escalated ? 'escalated' : (event.verified ? 'verified' : 'pending');
+  const badgeText = event.escalated ? 'Emergency' : (event.verified ? 'Verified' : 'Pending');
+
+  return `
+    <div class="hazard-card ${event.hazard_type}">
+      <div class="hazard-card-header">
+        <div class="hazard-type">${event.hazard_type.replace('_', ' ')}</div>
+        <div class="hazard-badge ${badge}">${badgeText}</div>
+      </div>
+      <div class="hazard-meta">
+        <div class="hazard-meta-item">
+          <span>⏱️</span>
+          <span>${fmtAgo(event.created_at || event.first_seen_at)}</span>
+        </div>
+        <div class="hazard-meta-item">
+          <span>📊</span>
+          <span>${((event.fused_confidence || event.max_confidence) * 100).toFixed(0)}%</span>
+        </div>
+        ${isCluster ? `
+        <div class="hazard-meta-item">
+          <span>🚗</span>
+          <span>${event.corroborating_vehicles?.length || event.report_count} reports</span>
+        </div>
+        ` : `
+        <div class="hazard-meta-item">
+          <span>🚗</span>
+          <span>${event.vehicle_id}</span>
+        </div>
+        `}
+      </div>
+      <div class="hazard-location">
+        <span>📍</span>
+        <span>${fmtLocation(event.lat, event.lon)}</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderRecentHazards() {
+  const container = document.getElementById('recent-hazards-list');
+
+  // Combine events and clusters, sort by time, take top 5
+  const combined = [
+    ...allEvents.map(e => ({ ...e, isCluster: false })),
+    ...allClusters.map(c => ({ ...c, created_at: c.first_seen_at, isCluster: true }))
+  ].sort((a, b) => (b.created_at || b.first_seen_at || 0) - (a.created_at || a.first_seen_at || 0))
+    .slice(0, 5);
+
+  if (combined.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🛣️</div><div class="empty-state-text">No hazards detected yet</div></div>';
+    return;
+  }
+
+  container.innerHTML = combined.map(item => renderHazardCard(item, item.isCluster)).join('');
+}
+
+function renderAllAlerts() {
+  const container = document.getElementById('all-alerts-list');
+  const countEl = document.getElementById('alert-count');
+
+  // Combine all alerts
+  const combined = [
+    ...allEvents.map(e => ({ ...e, isCluster: false })),
+    ...allClusters.map(c => ({ ...c, created_at: c.first_seen_at, isCluster: true }))
+  ].sort((a, b) => (b.created_at || b.first_seen_at || 0) - (a.created_at || a.first_seen_at || 0));
+
+  countEl.textContent = `${combined.length} alert${combined.length !== 1 ? 's' : ''}`;
+
+  if (combined.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><div class="empty-state-text">All clear - no hazards</div></div>';
+    return;
+  }
+
+  container.innerHTML = combined.map(item => renderHazardCard(item, item.isCluster)).join('');
+}
+
+function updateStats(newStats) {
+  stats = newStats;
+
+  // Home screen stats
+  document.getElementById('stat-vehicles-home').textContent = stats.active_vehicles ?? '-';
+  document.getElementById('stat-verified-home').textContent = stats.verified_events ?? '-';
+  document.getElementById('stat-pending-home').textContent = (allEvents.length - (stats.verified_events || 0)) || '-';
+  document.getElementById('stat-emergency-home').textContent = emergencies.length || '0';
+
+  // Profile screen stats
+  document.getElementById('profile-packets').textContent = stats.packets_on_air ?? '-';
+  document.getElementById('profile-ticks').textContent = stats.tick_count ?? '-';
+  document.getElementById('profile-clusters').textContent = allClusters.length || '0';
+}
+
+function setConnectionStatus(connected) {
+  const dot = document.getElementById('connection-dot');
+  const text = document.getElementById('connection-text');
+  const profileConn = document.getElementById('profile-connection');
+
+  if (connected) {
+    dot.classList.remove('offline');
+    text.textContent = 'Live';
+    profileConn.textContent = 'WebSocket';
+  } else {
+    dot.classList.add('offline');
+    text.textContent = 'Offline';
+    profileConn.textContent = 'Reconnecting...';
+  }
+}
+
+// WebSocket Connection
+function applySnapshot(snap) {
+  // Update vehicles
+  (snap.vehicles || []).forEach(upsertVehicle);
+
+  // Update clusters
+  allClusters = snap.clusters || [];
+  redrawHazardClusters(allClusters);
+
+  // Update events
+  allEvents = snap.recent_events || [];
+
+  // Update emergencies
+  emergencies = snap.emergencies || [];
+
+  // Update stats
+  updateStats(snap.stats || {});
+
+  // Re-render UI
+  renderRecentHazards();
+  renderAllAlerts();
+}
+
+let socket;
+function connectWebSocket() {
+  socket = new WebSocket(WS_URL);
+
+  socket.onopen = () => {
+    console.log('WebSocket connected');
+    setConnectionStatus(true);
+  };
+
+  socket.onclose = () => {
+    console.log('WebSocket disconnected');
+    setConnectionStatus(false);
+    setTimeout(connectWebSocket, 2000);
+  };
+
+  socket.onerror = () => {
+    socket.close();
+  };
+
+  socket.onmessage = (ev) => {
+    try {
+      const data = JSON.parse(ev.data);
+      applySnapshot(data);
+    } catch (e) {
+      console.error('Error parsing WebSocket message:', e);
+    }
+  };
+}
+
+// Fallback REST polling
+async function pollFallback() {
+  try {
+    const res = await fetch(API_BASE + '/api/fleet');
+    if (res.ok) {
+      const data = await res.json();
+      applySnapshot(data);
+      setConnectionStatus(true);
+    }
+  } catch (e) {
+    console.error('Polling error:', e);
+    setConnectionStatus(false);
+  }
+}
+
+// Start
+try {
+  init();
+} catch (e) {
+  console.error('WebSocket failed, using polling:', e);
+  setInterval(pollFallback, 2000);
+  pollFallback();
+}
+</script>
+
+</body>
+</html>
