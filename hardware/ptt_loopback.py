@@ -54,8 +54,9 @@ def main() -> None:
             continue
         rx.handle(VoicePacket.decode(pkt.encode()))  # through the real wire format
         kept += 1
-    clock.t += 10  # let the jitter window expire so gaps are filled with silence
-    rx.poll()
+    for _ in range(20):  # the receiver polls on a timer: let jitter windows expire so gaps become silence
+        clock.t += 1.0
+        rx.poll()
     sink.save(args.dst)
 
     st = rx.stats()[0]
