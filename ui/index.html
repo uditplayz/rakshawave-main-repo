@@ -2,261 +2,604 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>RakshaWave — Smart Road Sentinel</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#0b0f19" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="RakshaWave" />
+<meta name="description" content="RakshaWave — decentralized V2V road-hazard safety mesh" />
+<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="icon" type="image/png" href="/icons/icon-192.png" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<title>RakshaWave</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
 <style>
-  :root{
-    --navy:#0d1b3e; --navy2:#132a5e; --blue:#1a56d6; --teal:#0fb5ae; --orange:#e8792c;
-    --red:#d64545; --green:#1f9d55; --bg:#0b1222; --panel:#111a30; --panel2:#0e1729;
-    --text:#e8edf7; --muted:#93a1c2; --border:#22304f;
-  }
-  *{box-sizing:border-box;}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',Roboto,Arial,sans-serif;}
-  header{
-    display:flex;align-items:center;justify-content:space-between;
-    padding:14px 22px;background:linear-gradient(90deg,var(--navy),var(--navy2));
-    border-bottom:2px solid var(--blue);
-  }
-  header h1{font-size:20px;margin:0;letter-spacing:.5px;}
-  header h1 span{color:var(--orange);}
-  header .sub{color:var(--muted);font-size:12.5px;margin-top:2px;}
-  #status{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);}
-  #status .dot{width:9px;height:9px;border-radius:50%;background:var(--red);box-shadow:0 0 8px var(--red);}
-  #status.live .dot{background:var(--green);box-shadow:0 0 8px var(--green);}
-
-  .layout{display:grid;grid-template-columns:1.4fr 1fr;gap:14px;padding:14px;height:calc(100vh - 68px);}
-  @media (max-width:980px){.layout{grid-template-columns:1fr;height:auto;}}
-
-  .col{display:flex;flex-direction:column;gap:14px;min-height:0;}
-  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;}
-  .card h2{
-    margin:0;padding:10px 14px;font-size:13px;letter-spacing:.6px;text-transform:uppercase;
-    color:var(--muted);background:var(--panel2);border-bottom:1px solid var(--border);
-    display:flex;justify-content:space-between;align-items:center;
-  }
-  .card h2 .count{background:var(--blue);color:#fff;border-radius:20px;padding:1px 9px;font-size:11px;}
-
-  #map{flex:1;min-height:380px;}
-
-  .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:14px;}
-  .stat{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;}
-  .stat .v{font-size:22px;font-weight:700;color:#fff;}
-  .stat .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-top:2px;}
-
-  .list{overflow-y:auto;padding:8px;flex:1;}
-  .item{
-    display:flex;justify-content:space-between;gap:10px;padding:9px 10px;border-radius:8px;
-    background:var(--panel2);margin-bottom:7px;border-left:3px solid var(--blue);font-size:12.5px;
-  }
-  .item.pothole{border-left-color:var(--orange);}
-  .item.crack{border-left-color:var(--teal);}
-  .item.debris{border-left-color:#c9a227;}
-  .item .meta{color:var(--muted);font-size:11px;}
-  .badge{padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:600;white-space:nowrap;height:fit-content;}
-  .badge.verified{background:rgba(31,157,85,.18);color:#4ee08a;}
-  .badge.pending{background:rgba(147,161,194,.15);color:var(--muted);}
-  .badge.escalated{background:rgba(230,69,69,.2);color:#ff8080;}
-
-  .emergency-card{border-color:var(--red);}
-  .emergency-card h2{background:rgba(214,69,69,.15);color:#ff9d9d;}
-  .empty{color:var(--muted);font-size:12.5px;padding:16px;text-align:center;}
-
-  .legend{display:flex;gap:14px;padding:8px 14px;font-size:11px;color:var(--muted);border-top:1px solid var(--border);flex-wrap:wrap;}
-  .legend span{display:inline-flex;align-items:center;gap:5px;}
-  .legend i{width:9px;height:9px;border-radius:50%;display:inline-block;}
+:root{
+  --canvas:#0f172a; --bg:#0b0f19; --card:#111827; --card2:#1f2937; --line:#1f2937;
+  --muted:#9ca3af; --dim:#6b7280;
+  --cyan:#06b6d4; --red:#ef4444; --orange:#f97316; --yellow:#eab308; --green:#22c55e; --teal-bg:#0a2633;
+  --st:env(safe-area-inset-top,0px); --sb:env(safe-area-inset-bottom,0px);
+  --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:#fff;font-family:var(--font);font-size:14px;line-height:1.3;overscroll-behavior:none;-webkit-user-select:none;user-select:none;touch-action:manipulation}
+button{font-family:inherit;cursor:pointer;border:0;color:inherit;padding:0}
+#app{position:fixed;inset:0;overflow:hidden;background:var(--bg)}
+@media (min-width:600px){
+  body{background:var(--canvas) radial-gradient(800px 500px at 20% -10%,rgba(6,182,212,.10),transparent);display:grid;place-items:center}
+  #app{position:relative;inset:auto;width:430px;height:min(100vh - 32px,932px);height:min(100dvh - 32px,932px);border-radius:34px;border:1px solid #243044;box-shadow:0 30px 70px rgba(0,0,0,.55)}
+}
+.view,.pg{position:absolute;inset:0}
+.pg{animation:pgin .28s ease both;display:flex;flex-direction:column}
+.pg.nox{animation:none}
+@keyframes pgin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.scroll{position:absolute;inset:0;overflow-y:auto;padding:calc(var(--st) + 28px) 20px calc(92px + var(--sb));scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.scroll::-webkit-scrollbar{display:none}
+.hidden{display:none!important}
+.muted{color:var(--muted)}
+/* tab bar */
+.tabbar{position:absolute;left:0;right:0;bottom:0;height:calc(66px + var(--sb));padding:8px 6px var(--sb);background:var(--bg);border-top:1px solid var(--line);display:flex;z-index:40}
+.tabbar button{flex:1;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:10px;font-weight:500;color:var(--muted)}
+.tabbar button svg{width:24px;height:24px}
+.tabbar button.on{color:var(--cyan);font-weight:700}
+/* buttons / pills */
+.pbtn{display:block;width:100%;height:54px;border-radius:14px;background:var(--cyan);color:#041c24;font-weight:700;font-size:15px;text-align:center;line-height:54px}
+.pbtn.sec{background:#1f2937;color:#e5e7eb}
+.pbtn:active{filter:brightness(.9);transform:scale(.99)}
+.pbtn.dis{opacity:.75;pointer-events:none}
+.bot{margin-top:auto;padding:12px 24px calc(28px + var(--sb));display:flex;flex-direction:column;gap:12px;flex:none}
+.skip{position:absolute;top:calc(var(--st) + 22px);right:18px;color:var(--muted);font-size:13px;background:none;padding:8px 10px;z-index:3}
+h2.t{font-size:26px;font-weight:700;margin:0;letter-spacing:-.3px}
+.pill{font-size:10px;font-weight:700;letter-spacing:.6px;padding:5px 9px;border-radius:99px;background:#1f2937;color:#d1d5db;white-space:nowrap}
+.pill.critical{background:rgba(239,68,68,.15);color:#f87171}.pill.warning{background:rgba(249,115,22,.15);color:#fb923c}.pill.caution{background:rgba(234,179,8,.15);color:#facc15}
+.pill.ok{background:rgba(34,197,94,.15);color:#4ade80}.pill.cy{background:rgba(6,182,212,.15);color:#22d3ee}
+.pill.pulse{animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.45}}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;box-shadow:0 0 6px currentColor;color:var(--green)}
+.dot.off{background:#6b7280;color:#6b7280;box-shadow:none}.dot.wait{background:var(--yellow);color:var(--yellow)}
+/* splash */
+.splash{align-items:center;justify-content:center;text-align:center}
+.splash .big{position:absolute;width:min(420px,112vw);aspect-ratio:1;border-radius:50%;background:var(--teal-bg);left:50%;top:50%;transform:translate(-50%,-52%)}
+.splash>*{position:relative}.splash .big{position:absolute}
+.splash .lg{width:120px;height:120px;border:3px solid var(--cyan);border-radius:30px;display:grid;place-items:center;color:var(--cyan);box-shadow:0 0 40px rgba(6,182,212,.25);margin-bottom:22px}
+.splash .lg svg{animation:glow 2s ease-in-out infinite}
+@keyframes glow{50%{filter:drop-shadow(0 0 8px var(--cyan))}}
+.splash .nm{font-size:30px;font-weight:700;letter-spacing:-.4px}
+.splash .tg2{font-size:12.5px;color:var(--muted);margin-top:6px}
+.splash .ld{position:absolute;bottom:calc(70px + var(--sb));left:0;right:0;color:var(--cyan);font-size:11.5px;font-weight:600}
+.splash .ld div{width:76px;height:3px;background:#12303b;border-radius:3px;margin:9px auto 0;overflow:hidden}
+.splash .ld div i{display:block;height:100%;background:var(--cyan);width:0;animation:load 2.2s linear forwards}
+@keyframes load{to{width:100%}}
+/* onboarding */
+.ob .ill{flex:1;min-height:0;display:grid;place-items:center;padding-top:calc(var(--st) + 40px)}
+.ob .ill svg{width:min(360px,96%);max-height:100%;height:auto}
+.ob .tx{text-align:center;padding:0 30px;flex:none}
+.ob .tx h2{font-size:26px;line-height:1.2;margin:0 0 12px;font-weight:700;letter-spacing:-.3px}
+.ob .tx p{font-size:13px;color:var(--muted);margin:0;line-height:1.5}
+.ob .dots{display:flex;gap:6px;justify-content:center;padding:22px 0 4px;flex:none}
+.ob .dots i{width:7px;height:7px;border-radius:9px;background:#374151;transition:.3s}.ob .dots i.on{width:26px;background:var(--cyan)}
+.ob .bot{margin-top:0}
+.float{animation:fl 3s ease-in-out infinite}@keyframes fl{50%{transform:translateY(-6px)}}
+.dash{stroke-dasharray:6 6;animation:dash 1s linear infinite}@keyframes dash{to{stroke-dashoffset:-12}}
+.ring{transform-box:fill-box;transform-origin:center;animation:rg 3s ease-in-out infinite}@keyframes rg{50%{transform:scale(1.08)}}
+/* pair */
+.pair .scroll{display:flex;flex-direction:column;padding-bottom:calc(20px + var(--sb))}
+.pair .sub{font-size:12.5px;margin-top:8px;line-height:1.45;max-width:300px;color:var(--muted)}
+.pair .rad{position:relative;width:min(230px,26dvh,60vw);aspect-ratio:1;margin:18px auto;flex:none}
+.pair .rad svg{position:absolute;inset:0;width:100%;height:100%}
+.pair .rad i{position:absolute;inset:0;border-radius:50%;border:1.5px solid rgba(6,182,212,.35);animation:rip 3s ease-out infinite;opacity:0}
+.pair .rad i:nth-child(3){animation-delay:1s}.pair .rad i:nth-child(4){animation-delay:2s}
+@keyframes rip{0%{transform:scale(.25);opacity:.9}100%{transform:scale(1);opacity:0}}
+.pair .checks{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:4px 16px;flex:none}
+.pair .checks div{display:flex;gap:12px;align-items:center;font-size:13px;font-weight:500;padding:9px 0}
+.pair .ck{width:22px;height:22px;border-radius:50%;background:var(--green);display:grid;place-items:center;flex:none;font-size:12px;font-weight:700}.pair .ck.n{background:#374151;color:#d1d5db}
+.pair .dev{margin-top:14px;background:#0c2530;border:1px solid var(--cyan);border-radius:14px;padding:14px;display:flex;gap:12px;align-items:center;animation:pgin .4s both;flex:none}
+.pair .dev.scan{background:var(--card);border:1px dashed #374151;color:var(--muted);font-size:13px;animation:none}
+.pair .dev .ic{width:36px;height:36px;border-radius:10px;background:#12485a;display:grid;place-items:center;color:var(--cyan);flex:none}
+.pair .dev b{font-size:14px;display:block}.pair .dev small{font-size:11px;color:var(--muted)}.pair .dev .pill{margin-left:auto}
+.pair .cn{margin-top:auto;padding-top:16px;flex:none}
+.spin{width:16px;height:16px;border:2.5px solid rgba(4,28,36,.3);border-top-color:#041c24;border-radius:50%;display:inline-block;vertical-align:-3px;margin-right:8px;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+/* home */
+.lbl{font-size:10.5px;letter-spacing:.6px;color:var(--muted);font-weight:500}
+.hw{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.hw .pd{display:flex;gap:7px;align-items:center;font-weight:600;font-size:14px;margin-top:2px}
+.risk{border-radius:16px;padding:16px;border:1.5px solid;margin-bottom:12px;transition:.4s}
+.risk.mod{background:#221d17;border-color:#a8641c}.risk.mod .k{color:#f59e0b}
+.risk.high{background:#2a1316;border-color:#b91c1c}.risk.high .k{color:#f87171}
+.risk.low{background:#0f221b;border-color:#15803d}.risk.low .k{color:#4ade80}
+.risk .k{font-size:10px;font-weight:700;letter-spacing:.7px}.risk b{display:block;font-size:19px;margin:5px 0 4px;font-weight:700}.risk small{font-size:12px;color:#a8a29e}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+.mini{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;min-height:112px}
+.mini .lbl{font-size:9.5px;letter-spacing:.6px;font-weight:600}
+.sig{display:flex;gap:3px;align-items:flex-end;height:20px;margin:12px 0 8px}.sig i{width:5px;border-radius:2px;background:#374151}.sig i.on{background:var(--cyan)}
+.mini .v{font-size:19px;font-weight:700}.mini .n{font-size:38px;font-weight:800;color:var(--cyan);line-height:1;margin:8px 0}.mini small{font-size:12px;color:var(--muted)}
+.sh{font-size:14px;font-weight:700;margin:0 0 10px}
+.hrow{display:flex;gap:12px;align-items:center;background:var(--card);border:1px solid;border-radius:16px;padding:11px 12px;margin-bottom:9px;text-align:left;width:100%}
+.hrow.new{animation:pgin .35s both}
+.hrow.critical{border-color:rgba(239,68,68,.4)}.hrow.warning{border-color:rgba(249,115,22,.4)}.hrow.caution{border-color:rgba(234,179,8,.35)}
+.hrow .m{flex:1;min-width:0}.hrow b{display:block;font-size:14.5px;font-weight:600}.hrow small{font-size:11.5px;color:var(--muted);display:block;margin-top:2px}
+.tile{width:var(--sz,44px);height:var(--sz,44px);border-radius:12px;display:grid;place-items:center;flex:none}.tile svg{width:52%;height:52%}
+.tile.red{background:rgba(239,68,68,.2);color:#ef4444}.tile.orange{background:rgba(249,115,22,.2);color:#f97316}.tile.yellow{background:rgba(234,179,8,.2);color:#eab308}
+.empty{text-align:center;color:var(--muted);font-size:13px;padding:26px 10px;border:1px dashed #263041;border-radius:16px}
+/* banner */
+.banner{position:absolute;top:calc(var(--st) + 10px);left:12px;right:12px;z-index:70;background:rgba(17,24,39,.97);border:1px solid;border-radius:18px;padding:11px 12px;display:flex;gap:11px;align-items:center;box-shadow:0 14px 30px rgba(0,0,0,.5);transform:translateY(-200px);opacity:0;pointer-events:none;transition:transform .35s cubic-bezier(.2,.9,.3,1.1),opacity .25s}
+.banner.show{transform:none;opacity:1;pointer-events:auto}
+.banner.warning{border-color:rgba(249,115,22,.6)}.banner.caution{border-color:rgba(234,179,8,.6)}.banner.critical{border-color:rgba(239,68,68,.7)}.banner.info{border-color:rgba(6,182,212,.6)}.banner.good{border-color:rgba(34,197,94,.6)}
+.banner b{font-size:13.5px;display:block}.banner small{font-size:11.5px;color:var(--muted)}
+/* alert */
+.alert{overflow:hidden}
+.alert .abg{position:absolute;width:min(150vw,640px);aspect-ratio:1;border-radius:50%;left:50%;top:calc(var(--st) + 40px);background:radial-gradient(circle at 40% 45%,rgba(239,68,68,.34),rgba(239,68,68,.2) 62%,rgba(239,68,68,.12));animation:ap 2.4s ease-in-out infinite;transform:translateX(-42%)}
+@keyframes ap{50%{transform:translateX(-42%) scale(1.04)}}
+.alert>*{position:relative}.alert .abg{position:absolute}
+.alert .ptop{display:flex;justify-content:space-between;align-items:center;padding:calc(var(--st) + 22px) 20px 0;font-size:12px;color:#d1d5db;flex:none}
+.pill.sol{background:#dc2626;color:#fff;display:inline-flex;gap:6px;align-items:center;font-size:10.5px;padding:6px 11px}.pill.sol i{width:7px;height:7px;border-radius:50%;background:#fff;animation:blink 1s infinite}
+.alert .mid{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 20px}
+.alert .ico{width:min(118px,15dvh);aspect-ratio:1;border-radius:50%;border:4px solid #ef4444;background:rgba(239,68,68,.22);display:grid;place-items:center;color:#ef4444;animation:pr 1.6s ease-out infinite;margin-bottom:min(30px,3dvh)}
+@keyframes pr{0%{box-shadow:0 0 0 0 rgba(239,68,68,.5)}100%{box-shadow:0 0 0 38px rgba(239,68,68,0)}}
+.alert .ico svg{width:46%;height:46%}
+.alert h1{margin:0;font-size:29px;font-weight:700;letter-spacing:-.4px}
+.alert .ad{font-size:min(46px,6dvh);font-weight:800;color:#fca5a5;letter-spacing:-1px;font-variant-numeric:tabular-nums;margin:6px 0 14px}
+.alert .desc{font-size:14px;line-height:1.5;color:#e5e7eb}
+.alert .st{margin:18px 20px 0;background:#0e1520;border:1px solid var(--line);border-radius:14px;display:flex;padding:13px 6px;text-align:center;cursor:pointer;position:relative;flex:none}
+.alert .st div{flex:1}.alert .st small{display:block;font-size:9px;letter-spacing:.8px;color:var(--muted);font-weight:600;margin-bottom:5px}
+.alert .st b{font-size:15px;font-weight:700}.alert .st .c{color:var(--cyan)}
+.alert .st .arrow{position:absolute;right:10px;top:-9px;font-size:9.5px;background:#0e1520;padding:0 6px;color:var(--cyan);font-weight:600;flex:none;width:auto}
+.alert .bot{margin-top:0;padding-top:18px}
+/* trust */
+.trust .sub{font-size:13px;color:var(--muted);margin:6px 0 18px}
+.tcard{background:#0a202c;border:1.5px solid #0e7490;border-radius:18px;padding:18px;text-align:center;margin-bottom:16px}
+.tcard .lbl{color:var(--cyan);font-weight:700;letter-spacing:.8px;font-size:10.5px}.tcard .pc{font-size:62px;font-weight:800;letter-spacing:-2px;line-height:1.1;margin:6px 0 8px}
+.dl{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:6px 16px;margin-bottom:14px}
+.dl div{display:flex;justify-content:space-between;gap:10px;padding:9px 0;font-size:12px}.dl div span{color:var(--muted)}.dl div b{font-weight:600;text-align:right}
+.dl .hd{display:block;font-size:10.5px;letter-spacing:.7px;font-weight:600;color:#cbd5e1;padding:10px 0 4px}.dl .nd{align-items:center}
+/* report */
+.rep .sub{font-size:13px;color:var(--muted);margin:6px 0 20px;line-height:1.4;max-width:260px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.rt{background:var(--card);border:1px solid var(--line);border-radius:18px;height:min(128px,15dvh);min-height:96px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:11px;font-weight:600;font-size:13.5px;transition:.15s}
+.rt:active{transform:scale(.96);border-color:var(--cyan)}
+.gps{margin-top:16px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 14px;font-size:11.5px;color:#d1d5db;display:flex;align-items:center;gap:9px}
+.done{align-items:center;text-align:center;overflow:hidden}
+.done .cc{position:absolute;width:min(400px,106vw);aspect-ratio:1;border-radius:50%;background:#0d2a21;left:50%;top:46%;transform:translate(-50%,-50%)}
+.done .mid{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;padding:0 24px}
+.done .ok{width:124px;height:124px;border-radius:50%;border:3.5px solid var(--green);display:grid;place-items:center;color:var(--green);background:rgba(34,197,94,.1);margin-bottom:26px}
+.done .ok.q{border-color:var(--yellow);color:var(--yellow);background:rgba(234,179,8,.1)}
+.done .ok svg{width:58px;height:58px;stroke-dasharray:60;stroke-dashoffset:60;animation:draw .6s .25s forwards}@keyframes draw{to{stroke-dashoffset:0}}
+.done h2{margin:0 0 12px;font-size:25px;font-weight:700}.done p{margin:3px 0;font-size:12.5px;color:var(--muted)}.done p.q{color:#fb923c}
+.done .bot{width:100%;position:relative}
+/* map */
+.map{background:#0a0f1a}
+.map svg.mp{position:absolute;inset:0;width:100%;height:100%}
+.mpill{position:absolute;top:calc(var(--st) + 18px);z-index:5;background:rgba(17,24,39,.92);border:1px solid #243044;border-radius:99px;padding:7px 12px;font-size:11.5px;font-weight:700;display:flex;gap:7px;align-items:center}
+.mcard{position:absolute;left:16px;right:16px;bottom:calc(82px + var(--sb));background:rgba(17,24,39,.96);border:1px solid #243044;border-radius:16px;padding:14px;z-index:5}
+.mcard div{display:flex;justify-content:space-between;align-items:center}.mcard b{font-size:14.5px}.mcard small{display:block;margin-top:6px;font-size:12px;color:var(--cyan);font-weight:600}
+.roadlane{stroke-dasharray:14 16;animation:lane .9s linear infinite}@keyframes lane{to{stroke-dashoffset:-30}}
+.rt-dot{animation:lane 1.2s linear infinite}
+/* history */
+.chips{display:flex;gap:8px;margin:14px 0 18px;flex-wrap:wrap}
+.fc{font-size:12px;font-weight:700;padding:6px 13px;border-radius:99px;background:#1f2937;color:#d1d5db}.fc.on{background:var(--cyan);color:#041c24}
+.fc.r{background:rgba(239,68,68,.15);color:#f87171}.fc.o{background:rgba(249,115,22,.15);color:#fb923c}.fc.y{background:rgba(234,179,8,.15);color:#facc15}
+.fc.r.on{background:#ef4444;color:#fff}.fc.o.on{background:#f97316;color:#fff}.fc.y.on{background:#eab308;color:#111}
+.sec-t{font-size:10.5px;letter-spacing:1px;color:var(--muted);font-weight:600;margin:0 0 10px}
+.trip{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px 14px;margin-bottom:10px}
+.trip div{display:flex;justify-content:space-between;font-weight:600;font-size:14px}.trip div span{color:var(--cyan);font-size:13px}.trip small{color:var(--muted);font-size:11.5px;display:block;margin-top:6px}
+.hr2{display:flex;gap:12px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:11px 12px;margin-bottom:10px}
+.hr2 .m{flex:1}.hr2 b{display:block;font-size:14px;font-weight:600}.hr2 small{font-size:11.5px;color:var(--muted)}
+/* settings */
+.sc{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;margin-bottom:12px}.sc .lbl{font-size:9.5px;font-weight:600;letter-spacing:.8px}
+.sld{position:relative;height:22px;margin:12px 0 6px}.sld input{position:absolute;inset:0;width:100%;opacity:0;margin:0;cursor:pointer;z-index:2}
+.sld .tr{position:absolute;top:9px;left:0;right:0;height:4px;border-radius:4px;background:#374151}.sld .fl{position:absolute;top:9px;left:0;height:4px;border-radius:4px;background:var(--cyan)}
+.sld .th{position:absolute;top:1px;width:20px;height:20px;border-radius:50%;background:#fff;margin-left:-10px;box-shadow:0 2px 6px rgba(0,0,0,.5)}
+.sl2{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}.sl2 span:last-child{color:var(--cyan);font-weight:600}
+.srow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;text-align:left;width:100%;background:none}
+.srow b{font-size:14px;font-weight:600;display:block}.srow small{font-size:11px;color:var(--muted)}
+.tg3{width:46px;height:27px;border-radius:99px;background:#374151;position:relative;transition:.2s;flex:none}
+.tg3::after{content:"";position:absolute;top:3px;left:3px;width:21px;height:21px;border-radius:50%;background:#fff;transition:.2s}.tg3.on{background:var(--cyan)}.tg3.on::after{left:22px}
+.lang{background:#1f2937;border:0;color:#fff;font-size:12px;font-weight:600;padding:6px 12px;border-radius:99px;font-family:inherit;appearance:none;-webkit-appearance:none;text-align:center}
+.ec{display:flex;justify-content:space-between;font-size:13px;padding:7px 0}.ec span{color:var(--muted);font-size:12px}
+.add{background:none;color:var(--cyan);font-weight:700;font-size:12px;float:right}
+.lnk{background:#1f2937;color:#e5e7eb;font-size:12px;font-weight:600;padding:7px 12px;border-radius:10px}
+.ver{text-align:center;color:var(--dim);font-size:11px;margin:6px 0 4px}
 </style>
 </head>
 <body>
-
-<header>
-  <div>
-    <h1>Raksha<span>Wave</span> — Smart Road Sentinel</h1>
-    <div class="sub">AI-powered road hazard detection &amp; vehicle-to-vehicle safety alert &nbsp;</div>
-  </div>
-  <div id="status"><span class="dot"></span><span id="status-text">connecting…</span></div>
-</header>
-
-<div class="layout">
-  <div class="col">
-    <div class="card" style="flex:1;">
-      <h2>Live Vehicle &amp; Hazard Map</h2>
-      <div id="map"></div>
-      <div class="legend">
-        <span><i style="background:#1a56d6"></i> Vehicle</span>
-        <span><i style="background:#e8792c"></i> Pothole</span>
-        <span><i style="background:#0fb5ae"></i> Crack</span>
-        <span><i style="background:#c9a227"></i> Debris</span>
-        <span><i style="background:#d64545"></i> Emergency cluster</span>
-      </div>
-    </div>
-    <div class="card">
-      <h2>Fleet Stats</h2>
-      <div class="stats-row">
-        <div class="stat"><div class="v" id="stat-vehicles">–</div><div class="l">Active Vehicles</div></div>
-        <div class="stat"><div class="v" id="stat-packets">–</div><div class="l">Packets on Mesh</div></div>
-        <div class="stat"><div class="v" id="stat-verified">–</div><div class="l">Verified Hazards</div></div>
-        <div class="stat"><div class="v" id="stat-ticks">–</div><div class="l">Sim Ticks</div></div>
-      </div>
-    </div>
-  </div>
-
-  <div class="col">
-    <div class="card emergency-card" style="flex:0 0 auto;max-height:220px;">
-      <h2>Emergency Response <span class="count" id="count-emergency">0</span></h2>
-      <div class="list" id="list-emergency"><div class="empty">No emergencies — all clear.</div></div>
-    </div>
-    <div class="card" style="flex:1;">
-      <h2>Hazard Clusters (Multi-Vehicle Verified) <span class="count" id="count-clusters">0</span></h2>
-      <div class="list" id="list-clusters"><div class="empty">Waiting for corroborated reports…</div></div>
-    </div>
-    <div class="card" style="flex:1;">
-      <h2>Recent Hazard Alerts <span class="count" id="count-events">0</span></h2>
-      <div class="list" id="list-events"><div class="empty">Waiting for hazard alerts…</div></div>
-    </div>
-  </div>
+<div id="app">
+  <div class="view" id="view"></div>
+  <div class="tabbar hidden" id="tabbar"></div>
+  <div class="banner" id="banner"></div>
 </div>
 
 <script>
-const API_BASE = location.origin;
-const WS_URL = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws/fleet";
+/* =====================================================================
+   RakshaWave PWA — one phone, live over WebSocket.
+   Open the site on two phones: a hazard reported on one reaches the other
+   in real time, gets verified by peer consensus on the server, then alerts.
+   ===================================================================== */
+const $=(s,r=document)=>r.querySelector(s);
+const $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const LS={get(k,d){try{const v=localStorage.getItem('rw.'+k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem('rw.'+k,JSON.stringify(v))}catch(e){}}};
+const rssiBars=r=>r>-60?4:r>-72?3:r>-85?2:r>-100?1:0;
 
-const map = L.map('map', { zoomControl: true }).setView([18.5204, 73.8567], 14);
-const CARTO_API_KEY = 'cb1_4tf0_1_60a232ad5797eee68feae3f7';
+/* ---------- icons & hazard metadata ---------- */
+const S=(p,extra='')=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" ${extra}>${p}</svg>`;
+const TAB={
+  home:S('<path d="M4 11l8-7 8 7v8.5a1.5 1.5 0 0 1-1.5 1.5H15v-6H9v6H5.5A1.5 1.5 0 0 1 4 19.5z"/>'),
+  map:S('<path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/>'),
+  report:S('<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>'),
+  history:S('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
+  settings:S('<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/>')
+};
+const GLYPH={
+  accident:S('<path d="M12 5.5v8"/><circle cx="12" cy="18.2" r=".6" fill="currentColor"/>','stroke-width="3"'),
+  fog:S('<path d="M4 9c2-2 4 2 8 0s6 2 8 0M4 15c2-2 4 2 8 0s6 2 8 0"/>'),
+  pothole:S('<circle cx="12" cy="12" r="6"/>','stroke-width="3"'),
+  blocked:S('<path d="M6 6l12 12M18 6L6 18"/>','stroke-width="2.6"'),
+  roadwork:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5l9 15.5H3z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>',
+  landslide:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 5v15H5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>'
+};
+const HZ={
+  accident:{name:'Accident',title:'Accident ahead',sev:'critical',col:'red',place:'Mumbai-Pune Expwy',loc:'Mumbai-Pune Expressway, near Khopoli exit.',adv:'Slow down. Lane 2 blocked.'},
+  fog:{name:'Fog',title:'Dense fog',sev:'warning',col:'orange',place:'Visibility under 30 m',loc:'NH48 near Lonavala.',adv:'Reduce speed and use fog lights.'},
+  pothole:{name:'Pothole',title:'Pothole',sev:'caution',col:'yellow',place:'Right lane',loc:'NH48 · right lane.',adv:'Keep left of the marked lane.'},
+  blocked:{name:'Blocked Road',title:'Road blocked',sev:'critical',col:'red',place:'Both lanes',loc:'NH48 · both lanes obstructed.',adv:'Stop and take the diversion.'},
+  roadwork:{name:'Roadwork',title:'Roadwork',sev:'warning',col:'orange',place:'Lane 1 closed',loc:'NH48 · work zone, 40 km/h limit.',adv:'Merge right and slow down.'},
+  landslide:{name:'Landslide',title:'Landslide ahead',sev:'critical',col:'red',place:'Malshej Ghat',loc:'Malshej Ghat · debris on road.',adv:'Stop. Do not proceed.'}
+};
+const tile=(t,sz=44)=>`<div class="tile ${HZ[t].col}" style="--sz:${sz}px">${GLYPH[t]}</div>`;
+const SEVR={critical:3,warning:2,caution:1};
+const fmtD=d=>d>=1?d.toFixed(1)+' km':Math.max(10,Math.round(d*100)*10)+' m';
+const hm=(ms=Date.now())=>new Date(ms).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',hour12:false});
+const fullTime=ms=>{const d=new Date(ms);return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})+' · '+d.toLocaleTimeString([], {hour12:false})};
+const SHIELD=`<svg width="66" height="66" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.3 7.8-8 9-4.7-1.2-8-4.5-8-9V6z"/><path d="M8.5 12c1.2-1.6 2.3-1.6 3.5 0s2.3 1.6 3.5 0"/></svg>`;
 
-L.tileLayer(`https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?api_key=${CARTO_API_KEY}`, {
-  attribution: '&copy; OpenStreetMap &copy; CARTO',
-  maxZoom: 19
-}).addTo(map);
+/* ---------- device identity (stable per phone) ---------- */
+function hash(s){let h=2166136261;for(const c of s){h^=c.charCodeAt(0);h=Math.imul(h,16777619)}return h>>>0}
+let deviceId=LS.get('device',null);if(!deviceId){deviceId=(crypto.randomUUID?crypto.randomUUID():String(Math.random()).slice(2)+Date.now());LS.set('device',deviceId)}
+const H=hash(deviceId);
+const ME={id:deviceId,unit:`RW-Unit ${String(10+H%90)}`,unitId:`#RL-${1000+(H>>8)%9000}`};
 
-const vehicleMarkers = {};
-const hazardMarkers = [];
-const hazardColors = { pothole:'#e8792c', crack:'#0fb5ae', debris:'#c9a227', unknown_hazard:'#93a1c2' };
+/* =====================================================================
+   APP STATE
+   ===================================================================== */
+const App={
+  screen:'splash',tab:'home',prev:'home',prevTab:'home',
+  paired:LS.get('paired',false),pairState:'scan',
+  pos:(H%5)*0.3,speed:62,
+  conn:'connecting',peers:[],hazards:[],alertH:null,route:false,hFilter:'all',last:null,
+  rssi:-68,battery:82,seen:new Set(),acked:new Set(),outbox:[],bannerT:0,
+  settings:Object.assign({sens:64,audio:true,vib:true,lang:'English',anon:true,lowdata:false,drive:true,
+    contacts:[['Ramesh Patil','+91 98•••• 4210'],['Fleet Control','+91 20•••• 7788']]},LS.get('settings',{})),
+  history:LS.get('history',[
+    {type:'fog',title:'Dense fog',sub:'Lonavala · 14:05',tag:'Received',sev:'warning'},
+    {type:'pothole',title:'Pothole reported',sub:'NH48 · 13:41',tag:'Reported',sev:'caution'}])
+};
+const save=()=>{LS.set('settings',App.settings);LS.set('history',App.history.slice(0,40))};
+const view=$('#view'),tabbar=$('#tabbar'),bannerEl=$('#banner');
+const TABS=['home','map','report','history','settings'],TABLBL={home:'Home',map:'Map',report:'Report',history:'History',settings:'Settings'};
+tabbar.innerHTML=TABS.map(t=>`<button data-tab="${t}">${TAB[t]}<span>${TABLBL[t]}</span></button>`).join('');
 
-function vehicleIcon(){
-  return L.divIcon({ className:'', html:'<div style="width:14px;height:14px;border-radius:50%;background:#1a56d6;border:2px solid #fff;box-shadow:0 0 6px #1a56d6"></div>', iconSize:[14,14] });
+/* ---------- derived ---------- */
+const dist=h=>h.pos-App.pos;
+const online=()=>App.conn==='online';
+const nearby=()=>online()?App.peers.length:0;
+const active=()=>App.hazards.filter(h=>dist(h)>-0.15&&h.state!=='rejected');
+const sorted=()=>active().sort((a,b)=>(SEVR[HZ[b.type].sev]-SEVR[HZ[a.type].sev])||(dist(a)-dist(b)));
+const trusted=()=>active().filter(h=>h.state==='verified');
+function risk(){
+  const top=trusted().filter(h=>dist(h)<8).sort((a,b)=>(SEVR[HZ[b.type].sev]-SEVR[HZ[a.type].sev])||dist(a)-dist(b))[0];
+  if(!top)return{cls:'low',lv:'Low',h:'Clear road ahead',sub:'NH48 near Lonavala · maintain speed'};
+  const sev=HZ[top.type].sev;
+  if(sev==='caution')return{cls:'low',lv:'Low',h:'Pothole ahead',sub:'NH48 near Lonavala · keep to speed limit'};
+  return sev==='critical'?{cls:'high',lv:'High',h:HZ[top.type].title,sub:'NH48 near Khopoli · slow down to 30 km/h'}
+    :{cls:'mod',lv:'Moderate',h:HZ[top.type].title.replace('Dense fog','Dense fog ahead'),sub:'NH48 near Lonavala · reduce speed to 40 km/h'};
+}
+const sensLevel=()=>{const v=App.settings.sens;return v<20?'Critical only':v<50?'Medium · critical + warning':'High · alerts within 5 km'};
+const sensAllows=sev=>{const v=App.settings.sens;return sev==='critical'||(sev==='warning'&&v>=20)||(sev==='caution'&&v>=50)};
+
+/* =====================================================================
+   REALTIME LINK  (WebSocket to the relay server)
+   ===================================================================== */
+const Net={
+  ws:null,retry:0,timers:[],
+  url(){
+    const q=new URLSearchParams(location.search).get('server');
+    if(q)return q;
+    if(location.protocol==='file:')return 'ws://localhost:8000/ws';
+    return (location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws';
+  },
+  connect(){
+    if(this.ws&&this.ws.readyState<=1)return;
+    setConn('connecting');
+    let ws;try{ws=new WebSocket(this.url())}catch(e){return this.scheduleRetry()}
+    this.ws=ws;
+    ws.onopen=()=>{this.retry=0;this.send({t:'hello',id:ME.id,unit:ME.unit,unitId:ME.unitId,pos:App.pos});setConn('online');
+      this.timers.forEach(clearInterval);
+      this.timers=[setInterval(()=>this.send({t:'pos',pos:App.pos,speed:App.settings.drive?App.speed:0}),1500),setInterval(()=>this.send({t:'ping'}),20000)];
+      const q=App.outbox.splice(0);q.forEach(t=>this.send({t:'report',type:t}));
+      if(q.length){App.last&&(App.last.queued=false);if(App.screen==='reported')render(true)}};
+    ws.onmessage=e=>{try{onMsg(JSON.parse(e.data))}catch(err){console.error(err)}};
+    ws.onclose=()=>{this.timers.forEach(clearInterval);if(this.ws===ws){setConn('offline');this.scheduleRetry()}};
+    ws.onerror=()=>{try{ws.close()}catch(e){}};
+  },
+  scheduleRetry(){this.retry++;setTimeout(()=>this.connect(),Math.min(8000,700*this.retry))},
+  send(m){if(this.ws&&this.ws.readyState===1){this.ws.send(JSON.stringify(m));return true}return false}
+};
+function setConn(c){App.conn=c;if(c!=='online'){App.peers=[]}if(['home','map','settings'].includes(App.screen))render(true)}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&(!Net.ws||Net.ws.readyState>1))Net.connect()});
+addEventListener('online',()=>Net.connect());
+
+function fromServer(s){return Object.assign({},s,{mine:s.reporter===ME.id})}
+function onMsg(m){
+  if(m.t==='welcome'){
+    App.hazards=m.hazards.map(fromServer);App.peers=m.peers.filter(p=>p.id!==ME.id);
+    App.hazards.filter(h=>!h.mine&&h.state==='verifying').forEach(autoAck);
+  }else if(m.t==='peers'){App.peers=m.list.filter(p=>p.id!==ME.id)}
+  else if(m.t==='hazard'){
+    const h=fromServer(m.h);if(App.hazards.some(x=>x.id===h.id))return;
+    App.hazards.push(h);
+    if(h.mine){addHistory(h.type,'Reported',h);}
+    else{addHistory(h.type,'Received',h);vibrate([60]);autoAck(h);}
+  }else if(m.t==='update'){
+    const h=App.hazards.find(x=>x.id===m.h.id);if(!h)return;
+    const was=h.state;Object.assign(h,m.h);
+    if(was==='verifying'&&h.state==='verified'){h.mine?toast('good','Report verified',`${HZ[h.type].name} confirmed by ${h.c} nearby node${h.c>1?'s':''}`):notify(h)}
+    if(was==='verifying'&&h.state==='rejected'){
+      App.hazards=App.hazards.filter(x=>x!==h);
+      if(h.mine)toast('info','Not confirmed by peers',`Your ${HZ[h.type].name} report was held back · trust ${h.trust}%`);
+      else{addHistory(h.type,'Filtered',h,'Unverified');toast('info','Unverified alert blocked',`Peers could not confirm it · trust ${h.trust}%`)}
+    }
+  }else if(m.t==='gone'){App.hazards=App.hazards.filter(x=>x.id!==m.id)}
+  if(['home','map','history','settings'].includes(App.screen))render(true);
+}
+function autoAck(h){ // each phone independently validates a peer's alert, then confirms
+  if(App.acked.has(h.id))return;App.acked.add(h.id);
+  setTimeout(()=>{const valid=HZ[h.type]&&Math.abs(h.pos-App.pos)<60;Net.send({t:'ack',id:h.id,ok:!!valid})},1400);
+}
+function addHistory(type,tag,h,title){
+  const m=HZ[type];
+  App.history.unshift({type,title:title?`${m.name} blocked`:(tag==='Reported'?`${m.name} reported`:m.title),sub:`${tag==='Filtered'?'Unverified · ':''}NH48 · ${hm(h.at)}`,tag,sev:m.sev});save();
 }
 
-function upsertVehicle(v){
-  const latlng = [v.lat, v.lon];
-  if (vehicleMarkers[v.vehicle_id]) {
-    vehicleMarkers[v.vehicle_id].setLatLng(latlng);
-    vehicleMarkers[v.vehicle_id].setPopupContent(`<b>${v.vehicle_id}</b><br>${v.speed_kmh} km/h`);
-  } else {
-    vehicleMarkers[v.vehicle_id] = L.marker(latlng, { icon: vehicleIcon() })
-      .bindPopup(`<b>${v.vehicle_id}</b><br>${v.speed_kmh} km/h`)
-      .addTo(map);
+/* =====================================================================
+   FEEDBACK  (vibration, beep, voice, wake lock)
+   ===================================================================== */
+function vibrate(p){if(App.settings.vib&&navigator.vibrate)try{navigator.vibrate(p)}catch(e){}}
+function beep(freq=880,n=3){
+  if(!App.settings.audio)return;
+  try{const c=beep.c||(beep.c=new (window.AudioContext||window.webkitAudioContext)());
+    for(let i=0;i<n;i++){const o=c.createOscillator(),g=c.createGain();o.frequency.value=freq;o.type='square';g.gain.value=.05;o.connect(g);g.connect(c.destination);const t=c.currentTime+i*.28;o.start(t);o.stop(t+.14)}}catch(e){}
+}
+function speak(t){if(!App.settings.audio||!window.speechSynthesis)return;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.rate=1.05;speechSynthesis.speak(u)}catch(e){}}
+let wake=null;
+async function keepAwake(){try{if('wakeLock' in navigator&&!wake){wake=await navigator.wakeLock.request('screen');wake.addEventListener('release',()=>wake=null)}}catch(e){}}
+addEventListener('pointerdown',keepAwake,{once:true});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)keepAwake()});
+
+/* =====================================================================
+   NOTIFICATIONS
+   ===================================================================== */
+function notify(h){
+  const m=HZ[h.type];
+  if(m.sev==='critical'&&!['splash','ob1','ob2','ob3','pair'].includes(App.screen)){
+    if(['alert','trust'].includes(App.screen)){toast('critical',m.title,`${fmtD(dist(h))} ahead · ${h.src}`);return}
+    App.alertH=h;App.prev=App.screen;go('alert');vibrate([400,120,400,120,400]);beep(920,4);
+    speak(`${m.title}. ${fmtD(Math.max(0,dist(h))).replace('km','kilometres')}. ${m.adv}`);
+  }else if(sensAllows(m.sev)){
+    toast(m.sev,`${m.title} · ${fmtD(Math.max(0,dist(h)))}`,`${m.adv} · trust ${h.trust}%`);vibrate([120]);beep(660,1);
   }
 }
+function toast(kind,title,sub){
+  const typ=kind==='warning'?'fog':kind==='caution'?'pothole':kind==='critical'?'accident':null;
+  const icon=typ?tile(typ,38):`<div class="tile" style="--sz:38px;background:${kind==='good'?'rgba(34,197,94,.2);color:#22c55e':'rgba(6,182,212,.2);color:#06b6d4'}">${kind==='good'?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 8v5M12 17h.01"/></svg>'}</div>`;
+  bannerEl.className=`banner ${kind}`;bannerEl.innerHTML=`${icon}<div><b>${title}</b><small>${sub}</small></div>`;
+  void bannerEl.offsetWidth;bannerEl.classList.add('show');
+  const id=++App.bannerT;setTimeout(()=>{if(id===App.bannerT)bannerEl.classList.remove('show')},4200);
+}
+bannerEl.onclick=()=>{bannerEl.classList.remove('show');if(!['splash','ob1','ob2','ob3','pair','alert','trust'].includes(App.screen))go('home')};
 
-function redrawHazardClusters(clusters){
-  hazardMarkers.forEach(m => map.removeLayer(m));
-  hazardMarkers.length = 0;
-  clusters.forEach(c => {
-    const color = c.escalated ? '#d64545' : (hazardColors[c.hazard_type] || '#93a1c2');
-    const marker = L.circle([c.lat, c.lon], {
-      radius: 35, color, fillColor: color, fillOpacity: 0.35, weight: 2
-    }).bindPopup(`<b>${c.hazard_type}</b><br>${c.report_count} report(s)<br>Confidence: ${(c.max_confidence*100).toFixed(0)}%${c.escalated ? '<br><b style="color:#ff8080">ESCALATED</b>' : ''}`);
-    marker.addTo(map);
-    hazardMarkers.push(marker);
-  });
+/* =====================================================================
+   SCREENS
+   ===================================================================== */
+const SCREENS={
+splash:()=>`<div class="splash"><div class="big"></div><div class="lg">${SHIELD}</div><div class="nm">RakshaWave</div><div class="tg2">Decentralized V2V Safety Mesh</div><div class="ld">Initializing RF hardware…<div><i></i></div></div></div>`,
+ob1:()=>ob(1,`<svg viewBox="0 0 360 300"><circle cx="180" cy="130" r="92" fill="#0a2633"/>
+  <g class="float"><rect x="46" y="96" width="76" height="46" rx="12" fill="none" stroke="#ef4444" stroke-width="3"/><rect x="62" y="114" width="30" height="10" rx="5" fill="#ef4444" opacity=".6"/><circle cx="51" cy="88" r="11" fill="#ef4444"/><text x="51" y="93" text-anchor="middle" fill="#fff" font-size="14" font-weight="800" font-family="Inter,sans-serif">!</text></g>
+  <g class="float" style="animation-delay:-1.5s"><rect x="240" y="104" width="76" height="46" rx="12" fill="none" stroke="#06b6d4" stroke-width="3"/><rect x="266" y="122" width="30" height="10" rx="5" fill="#06b6d4" opacity=".7"/></g>
+  <path d="M122 118 C150 80 210 80 240 122" fill="none" stroke="#06b6d4" stroke-width="2.5" class="dash"/>
+  <text x="180" y="212" text-anchor="middle" fill="#06b6d4" font-size="11" font-weight="700" letter-spacing="1.2" font-family="Inter,sans-serif">VEHICLE TO VEHICLE</text></svg>`,
+  'Vehicles warn each<br>other directly','When one vehicle spots an accident, fog or a pothole, the vehicles behind it get a warning right away.','Next','next'),
+ob2:()=>ob(2,`<svg viewBox="0 0 360 300"><circle cx="180" cy="130" r="92" fill="#0a2633"/>
+  <path d="M70 140 L180 95 L290 140 M70 140 L290 140" fill="none" stroke="#06b6d4" stroke-width="2.5" class="dash"/>
+  <g class="ring" fill="#0b0f19" stroke="#06b6d4" stroke-width="3"><circle cx="180" cy="90" r="12"/><circle cx="72" cy="140" r="15"/><circle cx="288" cy="140" r="15"/></g>
+  <text x="180" y="212" text-anchor="middle" fill="#06b6d4" font-size="11" font-weight="700" letter-spacing="1.2" font-family="Inter,sans-serif">NO MOBILE DATA</text></svg>`,
+  'Works without internet','RakshaWave units talk to each other over an RF mesh. No SIM, no data, no signal bars needed on NH or ghat roads.','Next','next'),
+ob3:()=>ob(3,`<svg viewBox="0 0 360 300"><circle cx="180" cy="130" r="92" fill="#0a2633"/>
+  <g fill="#0b0f19" stroke="#06b6d4" stroke-width="2.5"><circle cx="102" cy="62" r="8"/><circle cx="258" cy="62" r="8"/><circle cx="180" cy="208" r="8"/></g>
+  <g class="float"><path d="M180 82 l52 18 v52 c0 32-22 52-52 62 -30-10-52-30-52-62 v-52z" fill="#0b2a3a" stroke="#06b6d4" stroke-width="3.5" stroke-linejoin="round" transform="translate(0 -22)"/>
+  <path d="M156 146 l18 18 32-36" fill="none" stroke="#22c55e" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" transform="translate(0 -22)"/></g>
+  <text x="180" y="262" text-anchor="middle" fill="#06b6d4" font-size="11" font-weight="700" letter-spacing="1.2" font-family="Inter,sans-serif">3 NODE CONSENSUS</text></svg>`,
+  'Verified before it<br>reaches you','Nearby units check every alert first, so false alarms stay out of your drive.','Get Started','start'),
+pair:()=>{
+  const found=App.pairState!=='scan',cn=App.pairState==='connecting';
+  return `<div class="pair"><div class="scroll"><h2 class="t">Pair your device</h2>
+  <div class="sub">Switch on the RakshaWave unit on your dashboard and keep your phone within 2&nbsp;m.</div>
+  <div class="rad"><svg viewBox="0 0 230 230"><circle cx="115" cy="115" r="112" fill="none" stroke="#0e3a47" stroke-width="1.5"/><circle cx="115" cy="115" r="76" fill="none" stroke="#0e5262" stroke-width="2"/><circle cx="115" cy="115" r="38" fill="none" stroke="#0e7490" stroke-width="2.5"/><circle cx="115" cy="115" r="9" fill="#06b6d4"/><circle cx="115" cy="115" r="14" fill="none" stroke="#06b6d4" stroke-opacity=".4"/><circle cx="188" cy="66" r="5" fill="#06b6d4"/></svg><i></i><i></i><i></i></div>
+  <div class="checks"><div><span class="ck">✓</span>Power on the RW unit</div><div><span class="ck">✓</span>Enable Bluetooth on this phone</div><div><span class="ck ${found?'':'n'}">${found?'✓':'3'}</span>Select your unit below</div></div>
+  ${found?`<div class="dev"><div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8" stroke-opacity=".5"/></svg></div><div><b>${ME.unit}</b><small>Signal -52 dBm · Firmware 1.3</small></div><span class="pill ok">${cn?'PAIRING':'FOUND'}</span></div>`
+  :`<div class="dev scan"><span class="spin" style="border-color:#374151;border-top-color:var(--cyan);margin:0"></span>Scanning for RakshaWave units…</div>`}
+  <div class="cn"><button class="pbtn ${found&&!cn?'':'dis'}" data-act="connect">${cn?'<span class="spin"></span>Connecting…':'Connect'}</button></div></div></div>`},
+home:()=>{
+  const r=risk(),hz=sorted(),bars=online()?rssiBars(App.rssi):0,n=nearby();
+  const st=online()?`Paired · ${ME.unit}`:App.conn==='connecting'?`Connecting · ${ME.unit}`:`Offline · ${ME.unit}`;
+  return `<div class="scroll"><div class="hw"><div><div class="lbl">Hardware</div><div class="pd"><i class="dot ${online()?'':App.conn==='connecting'?'wait':'off'}"></i>${st}</div></div><span class="pill" style="font-size:11px;font-weight:600;letter-spacing:0;padding:6px 11px">Battery ${Math.round(App.battery)}%</span></div>
+  <div class="risk ${r.cls}"><div class="k">CURRENT ROAD RISK</div><b>${r.lv} · ${r.h}</b><small>${r.sub}</small></div>
+  <div class="two"><div class="mini"><div class="lbl">RF MESH SIGNAL</div><div class="sig">${[8,12,16,20].map((h,i)=>`<i class="${i<bars?'on':''}" style="height:${h}px"></i>`).join('')}</div><div class="v" data-live="rssi">${online()?Math.round(App.rssi)+' dBm':'No link'}</div></div>
+  <div class="mini"><div class="lbl">IN MESH NETWORK</div><div class="n" data-live="mesh" ${online()?'':'style="color:#6b7280"'}>${n}</div><small>${n===1?'vehicle':'vehicles'} nearby</small></div></div>
+  <h3 class="sh">Active hazards · ${hz.length}</h3>
+  ${hz.length?hz.map(hrow).join(''):`<div class="empty">No hazards on your route.<br>${online()?'Drive safe — the mesh is watching.':'Waiting for the mesh to connect…'}</div>`}</div>`},
+alert:()=>{
+  const h=App.alertH,m=HZ[h.type];
+  return `<div class="alert"><div class="abg"></div><div class="ptop"><span class="pill sol"><i></i>CRITICAL ALERT</span><span>Just now</span></div>
+  <div class="mid"><div class="ico">${GLYPH[h.type]}</div><h1>${m.title}</h1><div class="ad" data-alertdist>${fmtD(Math.max(0,dist(h)))}</div><div class="desc">${m.loc}<br>${m.adv}</div></div>
+  <div class="st" data-act="trust"><span class="arrow">Why trust this? ›</span><div><small>TRUST SCORE</small><b class="c">${h.trust}%</b></div><div><small>SOURCE</small><b>${h.src}</b></div><div><small>VERIFIED BY</small><b>${h.c} nodes</b></div></div>
+  <div class="bot"><button class="pbtn" data-act="safe-route">Confirm Safe Route</button><button class="pbtn sec" data-act="ack">Acknowledge</button></div></div>`},
+trust:()=>{
+  const h=App.alertH||sorted()[0]||App.hazards[0];if(!h)return `<div class="scroll"></div>`;const m=HZ[h.type];
+  return `<div class="trust"><div class="scroll"><h2 class="t">Why you can trust this alert</h2><div class="sub">Checked by nearby units before it reached you.</div>
+  <div class="tcard"><div class="lbl">TRUST SCORE</div><div class="pc">${h.trust}%</div><span class="pill ok" style="font-size:10.5px;padding:6px 12px">✓ Verified by ${h.c} node consensus</span></div>
+  <div class="dl"><div><span>Hazard</span><b>${m.name} · ${m.place}</b></div><div><span>Source device</span><b>${h.src}</b></div><div><span>Received</span><b>${fullTime(h.at)}</b></div><div><span>Distance</span><b>${fmtD(Math.max(0,dist(h)))} ahead</b></div><div><span>Hops in mesh</span><b>${h.hops}</b></div></div>
+  <div class="dl"><span class="hd">AI VALIDATION CHECKS</span>${h.nodes.map(n=>`<div class="nd"><span style="color:#fff;font-weight:600">Node ${n[0]}</span><span class="pill ${n[1]==='Confirmed'?'ok':'cy'}" style="font-weight:600">${n[1]}</span></div>`).join('')}</div><div style="height:90px"></div></div>
+  <div class="bot" style="position:absolute;left:0;right:0;bottom:0;background:linear-gradient(transparent,var(--bg) 40%)"><button class="pbtn sec" data-act="close-trust">Close</button></div></div>`},
+report:()=>`<div class="rep"><div class="scroll"><h2 class="t">Report a hazard</h2><div class="sub">One tap. Location and time are added automatically.</div>
+  <div class="grid2">${['accident','fog','pothole','blocked','roadwork','landslide'].map(t=>`<button class="rt" data-act="report" data-type="${t}">${tile(t,42)}${HZ[t].name}</button>`).join('')}</div>
+  <div class="gps"><i class="dot" style="background:var(--cyan);color:var(--cyan)"></i>GPS locked · 18.76°N 73.41°E · ${hm()}</div></div></div>`,
+reported:()=>{
+  const l=App.last||{type:'accident',queued:false,time:hm()},m=HZ[l.type],n=nearby();
+  return `<div class="done"><div class="cc"></div><div class="mid"><div class="ok ${l.queued?'q':''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+  <h2>${l.queued?'Hazard saved':'Hazard reported'}</h2><p>${m.name} · NH48 · ${l.time}</p>
+  <p class="${l.queued||!n?'q':''}">${l.queued?'No connection · will send automatically':n?`Sent to ${n} ${n===1?'vehicle':'vehicles'} in the mesh`:'No other vehicles online yet · will verify when one joins'}</p></div>
+  <div class="bot"><button class="pbtn" data-act="done">Done</button></div></div>`},
+map:()=>{
+  const top=sorted().filter(h=>h.state==='verified')[0],m=top&&HZ[top.type];
+  return `<div class="map"><svg class="mp" data-live="mapsvg" viewBox="0 0 390 844" preserveAspectRatio="xMidYMid slice">${mapSVG()}</svg>
+  <div class="mpill" style="left:20px"><i class="dot ${online()?'':'off'}" style="${online()?'background:var(--cyan);color:var(--cyan)':''}"></i><span style="color:${online()?'var(--cyan)':'var(--muted)'}" data-live="mapmesh">${nearby()} in mesh</span></div>
+  <div class="mpill" style="left:126px">NH48 · <span data-live="spd">${App.settings.drive?Math.round(App.speed):0}</span> km/h</div>
+  <div class="mcard" ${top?`data-act="open-h" data-id="${top.id}"`:''}><div><b>${top?`${m.name} · <span data-dist="${top.id}">${fmtD(Math.max(0,dist(top)))}</span> ahead`:'Road clear · NH48'}</b>${top?`<span class="pill ${m.sev}">${m.sev.toUpperCase()}</span>`:`<span class="pill ok">CLEAR</span>`}</div>
+  <small>${top?(m.sev==='critical'?(App.route?'Route confirmed: take Khopoli exit, +4 min':'Safe route: take Khopoli exit, +4 min'):m.adv):'No hazards detected within 5 km'}</small></div></div>`},
+history:()=>{
+  const f=App.hFilter,ok=x=>f==='all'||x.sev===f,items=App.history.filter(ok);
+  const row=x=>`<div class="hr2">${tile(x.type,42)}<div class="m"><b>${x.title}</b><small>${x.sub}</small></div><span class="pill ${x.tag==='Filtered'?'cy':''}">${x.tag}</span></div>`;
+  return `<div class="scroll"><h2 class="t">Trip history</h2>
+  <div class="chips">${[['all','All',''],['critical','Critical','r'],['warning','Warning','o'],['caution','Caution','y']].map(c=>`<button class="fc ${c[2]} ${f===c[0]?'on':''}" data-act="filter" data-f="${c[0]}">${c[1]}</button>`).join('')}</div>
+  <div class="sec-t">TODAY</div>${items.length?items.map(row).join(''):'<div class="empty">Nothing here yet.</div>'}
+  <div class="sec-t" style="margin-top:18px">YESTERDAY</div>
+  ${f==='all'?`<div class="trip"><div>Pune → Mumbai <span>148 km</span></div><small>2h 41m · 5 alerts received · 1 hazard reported</small></div>`:''}
+  ${ok({sev:'critical'})?row({type:'landslide',title:'Landslide',sub:'Malshej Ghat · 17:18',tag:'Received'}):''}</div>`},
+settings:()=>{
+  const s=App.settings,tg=(k,t,sub)=>`<button class="srow" data-act="tg" data-k="${k}"><div><b>${t}</b><small>${sub}</small></div><span class="tg3 ${s[k]?'on':''}"></span></button>`;
+  const total=online()?App.peers.length+1:0;
+  return `<div class="scroll"><h2 class="t" style="margin-bottom:18px">Settings</h2>
+  <div class="sc"><div class="lbl">ALERT SENSITIVITY</div><div class="sld"><div class="tr"></div><div class="fl" style="width:${s.sens}%"></div><div class="th" style="left:${s.sens}%"></div><input type="range" min="0" max="100" value="${s.sens}" data-k="sens"></div>
+  <div class="sl2"><span>Critical only</span><span data-live="sens">${sensLevel()}</span></div></div>
+  <div class="sc" style="padding:6px 16px">${tg('audio','Audio alerts','Voice warning for critical hazards')}${tg('vib','Vibration','Haptic pulse on new alert')}</div>
+  <div class="sc" style="padding:10px 16px"><div class="srow" style="padding:0"><b>Language</b><select class="lang" data-k="lang">${['English','हिन्दी','मराठी'].map(l=>`<option ${s.lang===l?'selected':''}>${l}</option>`).join('')}</select></div></div>
+  <div class="sc"><div class="lbl" style="margin-bottom:6px">EMERGENCY CONTACTS<button class="add" data-act="add-contact">+ Add</button></div>${s.contacts.map(c=>`<div class="ec"><b style="font-weight:600">${c[0]}</b><span>${c[1]}</span></div>`).join('')}</div>
+  <div class="sc" style="padding:6px 16px">${tg('anon','Share anonymous location','Hides vehicle ID from the mesh')}${tg('lowdata','Low-data mode','Fewer map updates')}</div>
+  <div class="sc" style="padding:6px 16px"><div class="lbl" style="padding:8px 0 2px">DEMO</div>${tg('drive','Simulate driving','Moves your vehicle along NH48 at 62 km/h')}
+    <div class="srow"><div><b>Mesh connection</b><small data-live="conn">${online()?`Live · ${total} device${total===1?'':'s'} connected`:App.conn==='connecting'?'Connecting…':'Offline · retrying'}</small></div><i class="dot ${online()?'':'off'}"></i></div>
+    <div class="srow ${deferred?'':'hidden'}"><div><b>Install app</b><small>Add RakshaWave to your home screen</small></div><button class="lnk" data-act="install">Install</button></div>
+    <div class="srow"><div><b>Replay onboarding</b><small>Unit ${ME.unit} · ${ME.unitId}</small></div><button class="lnk" data-act="replay">Replay</button></div></div>
+  <div class="ver">RakshaWave v1.0 · Decentralized V2V Safety Mesh</div></div>`}
+};
+function ob(i,ill,title,desc,cta,act){
+  return `<div class="ob"><button class="skip" data-act="skip">Skip</button><div class="ill">${ill}</div><div class="tx"><h2>${title}</h2><p>${desc}</p></div>
+  <div class="dots"><i class="${i==1?'on':''}"></i><i class="${i==2?'on':''}"></i><i class="${i==3?'on':''}"></i></div>
+  <div class="bot"><button class="pbtn" data-act="${act}">${cta}</button></div></div>`}
+function hrow(h){
+  const m=HZ[h.type],ver=h.state==='verifying',key=h.id+h.state,isNew=!App.seen.has(key);App.seen.add(key);
+  const pill=ver?`<span class="pill cy pulse">VERIFYING ${h.c}/${h.q}</span>`:`<span class="pill ${m.sev}">${m.sev.toUpperCase()}</span>`;
+  const sub=ver?(h.mine?'Waiting for nearby units to confirm…':'Nearby units are checking this alert…'):`<span data-dist="${h.id}">${fmtD(Math.max(0,dist(h)))}</span> · ${m.place}`;
+  return `<button class="hrow ${m.sev} ${isNew?'new':''}" data-act="open-h" data-id="${h.id}">${tile(h.type)}<div class="m"><b>${m.title}</b><small>${sub}</small></div>${pill}</button>`}
+
+/* ---------- live map ---------- */
+function mapPos(d,lat=0){
+  const f=d>=0?Math.min(450,235*Math.log(1+d*1.3)):Math.max(-230,d*180);
+  const ux=.40,uy=-.917;return{x:195+ux*f-uy*lat,y:430+uy*f+ux*lat};
+}
+function mapSVG(){
+  const hz=sorted().filter(h=>h.state!=='verifying'),c={x:195,y:430};
+  let g='';for(let i=-2;i<12;i++)g+=`<line x1="${i*40}" y1="-200" x2="${i*40}" y2="1100" stroke="#111b2b"/>`;for(let i=-5;i<27;i++)g+=`<line x1="-200" y1="${i*40}" x2="600" y2="${i*40}" stroke="#111b2b"/>`;
+  const a=mapPos(-8),b=mapPos(9);
+  let out=`<defs><radialGradient id="rg"><stop offset="0" stop-color="#06b6d4" stop-opacity=".12"/><stop offset="1" stop-color="#06b6d4" stop-opacity="0"/></radialGradient></defs>${g}
+  <line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#1d2735" stroke-width="54" stroke-linecap="round"/><line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#2a3544" stroke-width="46" stroke-linecap="round"/>
+  <line class="roadlane" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#4b5767" stroke-width="2"/>`;
+  hz.forEach(h=>{const m=HZ[h.type],lat=h.type==='pothole'?-60:h.type==='accident'?8:h.type==='fog'?44:20;
+    const p=mapPos(dist(h),lat),col={red:'#ef4444',orange:'#f97316',yellow:'#eab308'}[m.col],r=m.sev==='critical'?80:m.sev==='warning'?52:42;
+    out+=`<g><circle cx="${p.x}" cy="${p.y}" r="${r}" fill="${col}" fill-opacity=".14" stroke="${col}" stroke-width="2"/><circle cx="${p.x}" cy="${p.y}" r="${m.sev==='critical'?14:8}" fill="${col}">${m.sev==='critical'?'<animate attributeName="r" values="14;17;14" dur="1.6s" repeatCount="indefinite"/>':''}</circle>${m.sev==='critical'?`<text x="${p.x}" y="${p.y+5}" text-anchor="middle" font-size="15" font-weight="800" fill="#fff" font-family="Inter,sans-serif">!</text>`:''}</g>`});
+  const crit=trusted().find(h=>HZ[h.type].sev==='critical'&&dist(h)>0);
+  if(App.route||crit){const e=mapPos(crit?dist(crit):1.2,8);out+=`<line x1="${c.x}" y1="${c.y}" x2="${e.x}" y2="${e.y}" stroke="#06b6d4" stroke-width="4" stroke-linecap="round" stroke-dasharray="1 11" class="rt-dot"/>`}
+  App.peers.forEach(p=>{const q=mapPos(p.pos-App.pos,0);out+=`<g><circle cx="${q.x}" cy="${q.y}" r="9" fill="#22d3ee" stroke="#fff" stroke-width="2.5"/><text x="${q.x+14}" y="${q.y+4}" font-size="11" font-weight="700" fill="#cbd5e1" font-family="Inter,sans-serif">${p.unit}</text></g>`});
+  out+=`<circle cx="${c.x}" cy="${c.y}" r="150" fill="url(#rg)" stroke="#0e7490" stroke-opacity=".35"/><circle cx="${c.x}" cy="${c.y}" r="95" fill="none" stroke="#0e7490" stroke-opacity=".45"/><circle cx="${c.x}" cy="${c.y}" r="45" fill="none" stroke="#0e7490" stroke-opacity=".6"/>
+  <g transform="translate(${c.x} ${c.y}) rotate(24)"><path d="M0-22 L15 18 L0 10 L-15 18Z" fill="#3b82f6" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/></g>`;
+  return out}
+
+/* =====================================================================
+   RENDER + NAVIGATION
+   ===================================================================== */
+function go(s){
+  if(TABS.includes(s))App.tab=s;
+  App.screen=s;render();
+  if(s==='splash')setTimeout(()=>{if(App.screen==='splash')go(App.paired?'home':'ob1')},2300);
+  if(s==='pair'){App.pairState='scan';setTimeout(()=>{if(App.screen==='pair'&&App.pairState==='scan'){App.pairState='found';render(true)}},1500)}
+}
+function render(keep){
+  const sc=$('.scroll',view),st=sc&&keep?sc.scrollTop:0;
+  view.innerHTML=`<div class="pg ${keep?'nox':''}">${SCREENS[App.screen]()}</div>`;
+  const tabs=TABS.includes(App.screen);tabbar.classList.toggle('hidden',!tabs);
+  $$('button',tabbar).forEach(b=>b.classList.toggle('on',b.dataset.tab===App.tab));
+  const n=$('.scroll',view);if(n&&keep)n.scrollTop=st;
+}
+function reportHazard(type){
+  const sent=Net.send({t:'report',type});if(!sent)App.outbox.push(type);
+  App.last={type,time:hm(),queued:!sent};
+  App.prevTab=['home','map','history','settings'].includes(App.tab)?App.tab:'home';
+  if(!sent)addHistory(type,'Reported',{at:Date.now()});
+  vibrate([40]);go('reported');
 }
 
-function fmtAgo(ts){
-  const s = Math.max(0, Math.round(Date.now()/1000 - ts));
-  if (s < 60) return s + 's ago';
-  return Math.round(s/60) + 'm ago';
+/* ---------- input ---------- */
+view.addEventListener('click',onClick);
+tabbar.addEventListener('click',e=>{const b=e.target.closest('[data-tab]');if(b)go(b.dataset.tab)});
+view.addEventListener('input',onInput);view.addEventListener('change',onInput);
+let deferred=null;
+addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferred=e;if(App.screen==='settings')render(true)});
+function onClick(e){
+  const a=e.target.closest('[data-act]');if(!a||!a.dataset.act)return;
+  ({
+    skip:()=>go('pair'),next:()=>go(App.screen==='ob1'?'ob2':'ob3'),start:()=>go('pair'),
+    connect:()=>{if(App.pairState!=='found')return;App.pairState='connecting';render(true);setTimeout(()=>{App.paired=true;LS.set('paired',true);go('home')},1700)},
+    'open-h':()=>{const h=App.hazards.find(x=>x.id===a.dataset.id);if(!h||h.state==='verifying')return;
+      if(HZ[h.type].sev==='critical'){App.alertH=h;App.prev=App.screen;go('alert')}else go('map')},
+    trust:()=>go('trust'),'close-trust':()=>go(App.alertH?'alert':'home'),
+    ack:()=>go(App.prev&&!['alert','trust'].includes(App.prev)?App.prev:'home'),
+    'safe-route':()=>{App.route=true;go('map');toast('good','Safe route confirmed','Khopoli exit · +4 min · slow to 40 km/h')},
+    report:()=>reportHazard(a.dataset.type),done:()=>go(App.prevTab||'home'),
+    filter:()=>{App.hFilter=a.dataset.f;render(true)},
+    tg:()=>{const k=a.dataset.k;App.settings[k]=!App.settings[k];save();render(true)},
+    'add-contact':()=>{if(App.settings.contacts.length<4){App.settings.contacts.push(['Priya Sharma','+91 99•••• 1203']);save();render(true)}},
+    install:async()=>{if(deferred){deferred.prompt();await deferred.userChoice;deferred=null;render(true)}},
+    replay:()=>{App.paired=false;LS.set('paired',false);go('ob1')}
+  })[a.dataset.act]?.();
+}
+function onInput(e){
+  const k=e.target.dataset.k;if(!k)return;
+  if(k==='sens'){App.settings.sens=+e.target.value;$('.fl',view).style.width=$('.th',view).style.left=App.settings.sens+'%';$('[data-live=sens]',view).textContent=sensLevel();save()}
+  if(k==='lang'&&e.type==='change'){App.settings.lang=e.target.value;save()}
 }
 
-function renderEvents(events){
-  const el = document.getElementById('list-events');
-  document.getElementById('count-events').textContent = events.length;
-  if (!events.length){ el.innerHTML = '<div class="empty">Waiting for hazard alerts…</div>'; return; }
-  el.innerHTML = events.slice().reverse().map(e => `
-    <div class="item ${e.hazard_type}">
-      <div>
-        <div><b>${e.hazard_type.toUpperCase()}</b> · ${e.vehicle_id}</div>
-        <div class="meta">${fmtAgo(e.created_at)} · conf ${(e.fused_confidence*100).toFixed(0)}%</div>
-      </div>
-      <span class="badge ${e.verified ? 'verified' : 'pending'}">${e.verified ? 'VERIFIED' : 'PENDING'}</span>
-    </div>`).join('');
-}
+/* ---------- live loop ---------- */
+let lastT=performance.now(),acc=0;
+setInterval(()=>{
+  const now=performance.now(),dt=now-lastT;lastT=now;acc+=dt;
+  if(App.settings.drive)App.pos+=App.speed*dt/3.6e6;
+  if(acc<450)return;acc=0;
+  App.rssi=-68+Math.round(Math.sin(Date.now()/2300)*4);App.battery=Math.max(20,App.battery-.0004);
+  const set=(sel,v)=>{const n=$(sel,view);if(n&&n.textContent!==v)n.textContent=v};
+  set('[data-live=rssi]',online()?Math.round(App.rssi)+' dBm':'No link');set('[data-live=mesh]',String(nearby()));
+  set('[data-live=mapmesh]',nearby()+' in mesh');set('[data-live=spd]',String(App.settings.drive?Math.round(App.speed):0));
+  $$('[data-dist]',view).forEach(n=>{const h=App.hazards.find(x=>x.id===n.dataset.dist);if(h)n.textContent=fmtD(Math.max(0,dist(h)))});
+  const ad=$('[data-alertdist]',view);if(ad&&App.alertH)ad.textContent=fmtD(Math.max(0,dist(App.alertH)));
+  if(App.screen==='map'){const sv=$('svg.mp',view);if(sv)sv.innerHTML=mapSVG()}
+  const before=App.hazards.length;App.hazards=App.hazards.filter(h=>dist(h)>-0.4);
+  if(before!==App.hazards.length&&['home','map'].includes(App.screen))render(true);
+},100);
 
-function renderClusters(clusters){
-  const el = document.getElementById('list-clusters');
-  document.getElementById('count-clusters').textContent = clusters.length;
-  if (!clusters.length){ el.innerHTML = '<div class="empty">Waiting for corroborated reports…</div>'; return; }
-  el.innerHTML = clusters.slice().reverse().map(c => `
-    <div class="item ${c.hazard_type}">
-      <div>
-        <div><b>${c.hazard_type.toUpperCase()}</b> · ${c.cluster_id}</div>
-        <div class="meta">${c.corroborating_vehicles.length} vehicle(s) · ${c.report_count} reports</div>
-      </div>
-      <span class="badge ${c.escalated ? 'escalated' : 'pending'}">${c.escalated ? 'ESCALATED' : 'BUILDING'}</span>
-    </div>`).join('');
-}
-
-function renderEmergencies(list){
-  const el = document.getElementById('list-emergency');
-  document.getElementById('count-emergency').textContent = list.length;
-  if (!list.length){ el.innerHTML = '<div class="empty">No emergencies — all clear.</div>'; return; }
-  el.innerHTML = list.slice().reverse().map(e => `
-    <div class="item" style="border-left-color:#d64545">
-      <div>
-        <div><b>${e.hazard_type.toUpperCase()}</b> · ${e.cluster_id}</div>
-        <div class="meta">Confirmed by ${e.corroborating_vehicles.join(', ')}</div>
-      </div>
-      <span class="badge escalated">EMERGENCY</span>
-    </div>`).join('');
-}
-
-function renderStats(stats){
-  document.getElementById('stat-vehicles').textContent = stats.active_vehicles ?? '–';
-  document.getElementById('stat-packets').textContent = stats.packets_on_air ?? '–';
-  document.getElementById('stat-verified').textContent = stats.verified_events ?? '–';
-  document.getElementById('stat-ticks').textContent = stats.tick_count ?? '–';
-}
-
-function applySnapshot(snap){
-  (snap.vehicles || []).forEach(upsertVehicle);
-  redrawHazardClusters(snap.clusters || []);
-  renderEvents(snap.recent_events || []);
-  renderClusters(snap.clusters || []);
-  renderEmergencies(snap.emergencies || []);
-  renderStats(snap.stats || {});
-}
-
-function setStatus(live){
-  const box = document.getElementById('status');
-  const text = document.getElementById('status-text');
-  box.classList.toggle('live', live);
-  text.textContent = live ? 'live — mesh online' : 'disconnected — retrying…';
-}
-
-let socket;
-function connect(){
-  socket = new WebSocket(WS_URL);
-  socket.onopen = () => setStatus(true);
-  socket.onclose = () => { setStatus(false); setTimeout(connect, 2000); };
-  socket.onerror = () => socket.close();
-  socket.onmessage = (ev) => applySnapshot(JSON.parse(ev.data));
-}
-
-// Fallback to REST polling if WebSocket can't connect (e.g. static hosting).
-async function pollFallback(){
-  try {
-    const res = await fetch(API_BASE + '/api/fleet');
-    if (res.ok) { applySnapshot(await res.json()); setStatus(true); }
-  } catch (e) { setStatus(false); }
-}
-
-try {
-  connect();
-} catch (e) {
-  setInterval(pollFallback, 2000);
-  pollFallback();
-}
+/* ---------- boot ---------- */
+if('serviceWorker' in navigator&&location.protocol!=='file:')addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));
+window.RW={App,Net,ME,go,reportHazard};
+go('splash');Net.connect();
 </script>
 </body>
 </html>
