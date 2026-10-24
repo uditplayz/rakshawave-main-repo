@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RakshaWave 3D Twin</title>
+<style>
+:root{--bg:#0d1218;--panel:#151c25;--ink:#e6edf4;--mute:#8b9aab;--line:#273341;--accent:#3cb4d6;--pass:#3ccf7e;--fail:#ff6b72;--warn:#e5a63c}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Segoe UI,sans-serif;display:flex;flex-direction:column}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+header h1{font-size:16px;margin:0}
+header a{color:var(--accent);text-decoration:none;margin-left:auto;font-size:13px}
+#wrap{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 340px;min-height:0}
+#stage{position:relative;min-height:380px;overflow:hidden}
+#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+#labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.lbl{position:absolute;transform:translate(-50%,-100%);font-size:11px;background:#0009;color:#fff;padding:1px 6px;border-radius:4px;white-space:nowrap;border:1px solid #fff3}
+#views{position:absolute;left:10px;top:10px;display:flex;gap:6px;flex-wrap:wrap}
+#hint{position:absolute;left:10px;bottom:10px;color:#fff9;font-size:12px;text-shadow:0 1px 3px #000}
+#pick{position:absolute;right:10px;top:10px;max-width:260px;background:#000b;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px;display:none}
+#pick b{font-size:13px}
+aside{overflow:auto;border-left:1px solid var(--line);background:var(--panel);padding:10px;display:flex;flex-direction:column;gap:10px}
+.box{border:1px solid var(--line);border-radius:8px;padding:9px 10px}
+.box h3{margin:0 0 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button{font:inherit;background:var(--accent);color:#04202a;border:0;border-radius:6px;padding:6px 11px;font-weight:700;cursor:pointer}
+button.g{background:none;color:var(--accent);border:1px solid var(--accent)}
+button.danger{background:var(--fail);color:#fff}
+button:disabled{opacity:.4;cursor:not-allowed}
+#ptt{width:100%;padding:14px;font-size:15px;user-select:none;touch-action:none}
+#ptt.live{background:var(--fail);color:#fff}
+input[type=password],input[type=text]{font:inherit;width:100%;padding:5px 7px;border:1px solid var(--line);border-radius:6px;background:#0b0f14;color:var(--ink)}
+input[type=range]{width:100%}
+label{display:block;font-size:12px;color:var(--mute)}
+.pill{font-size:12px;padding:1px 8px;border-radius:99px;border:1px solid currentColor}
+.on{color:var(--pass)}.off{color:var(--mute)}.bad{color:var(--fail)}.warn{color:var(--warn)}
+pre{margin:0;background:#080b0f;color:#bcd3e3;padding:6px;border-radius:6px;font:11px/1.35 ui-monospace,Consolas,monospace;height:150px;overflow:auto;white-space:pre-wrap;word-break:break-all}
+canvas#oled2d{width:100%;image-rendering:pixelated;background:#000;border-radius:4px;border:1px solid var(--line)}
+table{width:100%;border-collapse:collapse;font-size:12px}td{padding:2px 0;vertical-align:top}td:first-child{color:var(--mute);width:42%}
+@media (max-width:860px){#wrap{grid-template-columns:1fr;grid-template-rows:62vh auto}aside{border-left:0;border-top:1px solid var(--line)}}
+</style>
+</head>
+<body>
+<header>
+  <h1>RakshaWave 3D Twin</h1>
+  <span class="pill off" id="link">simulation off</span>
+  <span class="small" style="color:var(--mute);font-size:12px" id="clock"></span>
+  <a href="/">&larr; Test bench</a>
+</header>
+<div id="wrap">
+  <div id="stage">
+    <canvas id="cv"></canvas>
+    <div id="labels"></div>
+    <div id="views">
+      <button class="g" data-view="device">Device</button><button class="g" data-view="top">Top</button>
+      <button class="g" data-view="road">Road</button><button class="g" data-view="orbit">Free orbit</button>
+    </div>
+    <div id="pick"></div>
+    <div id="tip" class="lbl" style="display:none;transform:none"></div>
+    <div id="hint">Drag to orbit, wheel to zoom, click a part for details. Hold the red button on the board to talk.</div>
+  </div>
+  <aside>
+    <div class="box">
+      <h3>Simulation (real firmware)</h3>
+      <div class="row">
+        <button id="start">Start</button><button class="g" id="stop" disabled>Stop</button>
+      </div>
+      <label style="margin-top:8px">Wokwi token (not stored)<input type="password" id="token" placeholder="blank = WOKWI_CLI_TOKEN" autocomplete="off"></label>
+      <div id="err" class="bad" style="font-size:12px;margin-top:6px"></div>
+    </div>
+    <div class="box">
+      <h3>Drive</h3>
+      <div class="row"><button id="hit" disabled>Drive over pothole</button>
+        <button class="g" id="peer" disabled>2nd vehicle +12 m</button></div>
+      <label style="margin-top:8px">MPU6050 accelZ <b id="gVal">1.0</b> g (alert at 2.8 g or more)
+        <input type="range" id="accel" min="0" max="4" step="0.1" value="1" disabled></label>
+      <button class="g" id="piAlert" style="margin-top:6px" disabled>Pi sends a debris alert over serial</button>
+    </div>
+    <div class="box">
+      <h3>Push to talk</h3>
+      <button id="ptt" disabled>HOLD TO TALK (or Space)</button>
+      <label style="margin-top:8px">Listener vehicle distance <b id="dVal">400</b> m
+        <input type="range" id="dist" min="50" max="3000" step="50" value="400"></label>
+      <label style="margin-top:6px"><input type="checkbox" id="useMic"> use my microphone instead of test speech</label>
+      <label><input type="checkbox" id="mute"> mute the listener's speaker</label>
+      <div id="pttInfo" style="font-size:12px;margin-top:4px;color:var(--mute)"></div>
+    </div>
+    <div class="box">
+      <h3>View</h3>
+      <label>Exploded view <input type="range" id="explode" min="0" max="1" step="0.01" value="0"></label>
+      <label><input type="checkbox" id="showLabels"> always show part labels (hover shows one)</label>
+    </div>
+    <div class="box">
+      <h3>Live from the firmware</h3>
+      <table>
+        <tr><td>LED (IO10)</td><td id="tLed" class="off">off</td></tr>
+        <tr><td>Buzzer (IO9)</td><td id="tBz" class="off">off</td></tr>
+        <tr><td>Sim time</td><td id="tNanos">-</td></tr>
+        <tr><td>Last alert</td><td id="tPkt">none yet</td></tr>
+        <tr><td>Fusion (Pi side)</td><td id="tFuse">-</td></tr>
+        <tr><td>Hazard cluster</td><td id="tCl">-</td></tr>
+      </table>
+      <div style="margin:8px 0 3px;color:var(--mute);font-size:12px">OLED (real screenshot)</div>
+      <canvas id="oled2d" width="128" height="64"></canvas>
+    </div>
+    <div class="box"><h3>Serial</h3><pre id="serial">-</pre></div>
+  </aside>
+</div>
+<script src="/static/vendor/three.min.js"></script>
+<script src="/static/vendor/OrbitControls.js"></script>
+<script src="/static/twin.js"></script>
+</body>
+</html>

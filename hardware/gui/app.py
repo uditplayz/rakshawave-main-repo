@@ -34,6 +34,8 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "hardware"))
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+from twin import TWIN, test_speech  # noqa: E402
 REPORTS = ROOT / "hardware" / "reports"
 PORT = int(os.environ.get("RW_GUI_PORT", "8765"))
 
@@ -432,6 +434,17 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(dict(id=run.id, state=run.state, lines=run.lines[since:], next=len(run.lines),
                                    suites=[{k: v for k, v in r.items() if k not in ("log",)} for r in run.results.values()],
                                    report=run.report_url))
+        if path == "/twin":
+            return self._send(200, (HERE / "twin.html").read_bytes(), MIME[".html"])
+        if path.startswith("/static/"):
+            p = (HERE / path[len("/static/"):]).resolve()
+            if HERE not in p.parents or not p.is_file():
+                return self._send(404, b"not found", "text/plain")
+            return self._send(200, p.read_bytes(), MIME.get(p.suffix.lower(), "application/octet-stream"))
+        if path == "/api/twin/state":
+            return self._json(TWIN.snapshot(int(q.get("oled", ["-1"])[0])))
+        if path == "/api/twin/audio":
+            return self._json(TWIN.remote_audio(int(q.get("since", ["0"])[0])))
         if path == "/api/reports":
             return self._json(list_reports())
         if path == "/api/diagram":
@@ -455,6 +468,26 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(ptt_loopback(pcm, float(body.get("loss", 0)), int(body.get("seed", 1))))
             if path == "/api/ptt/radio":
                 return self._json(ptt_radio([float(x) for x in body.get("distances", [300])], float(body.get("seconds", 3))))
+            if path.startswith("/api/twin/"):
+                cmd = path.rsplit("/", 1)[1]
+                if cmd == "start":
+                    return self._json(TWIN.start((body.get("token") or "").strip() or None))
+                if cmd == "stop":
+                    return self._json(TWIN.stop())
+                if cmd == "accel":
+                    return self._json(TWIN.set_accel(body.get("value", 1.0)))
+                if cmd == "hit":
+                    return self._json(TWIN.hit(float(body.get("g", 3.0))))
+                if cmd == "serial":
+                    return self._json(TWIN.write_serial(body.get("text", "")))
+                if cmd == "ptt":
+                    return self._json(TWIN.ptt(bool(body.get("press")), body.get("source", "synth")))
+                if cmd == "ptt_audio":
+                    return self._json(TWIN.ptt_audio(_pcm_from_b64(body["pcm"])))
+                if cmd == "peer":
+                    return self._json(TWIN.peer())
+                if cmd == "remote":
+                    return self._json(TWIN.set_remote_distance(body.get("distance", 400)))
             if path == "/api/schematic":
                 import kicad_check  # type: ignore
                 subprocess.run([kicad_check.find_cli(), "sch", "export", "pdf", "-o", str(ROOT / "hardware" / "schematic.pdf"),
@@ -466,12 +499,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def _test_speech(seconds: float) -> np.ndarray:
-    t = np.arange(int(8000 * seconds)) / 8000
-    f0 = 140 + 40 * np.sin(2 * np.pi * 0.7 * t)
-    phase = 2 * np.pi * np.cumsum(f0) / 8000
-    env = 0.55 + 0.45 * np.sin(2 * np.pi * 3.1 * t) ** 2
-    sig = sum(np.sin(k * phase) / k for k in range(1, 9))
-    return (3500 * sig * env).astype(np.int16)
+    return test_speech(seconds)
 
 
 def main() -> None:
