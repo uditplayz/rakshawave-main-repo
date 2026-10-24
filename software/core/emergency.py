@@ -25,6 +25,12 @@ logger = logging.getLogger("rakshawave.emergency")
 # rather than routine road-surface damage.
 COLLISION_HAZARD_TYPES = {"unknown_hazard", "debris"}
 
+# Routine road-surface damage. Every vehicle that hits a pothole or crack feels
+# an IMU impact (that is how the hit is detected), so impact alone says nothing
+# about a collision: these types never call emergency services, however many
+# vehicles corroborate them. They still escalate to a trusted hazard cluster.
+ROUTINE_HAZARD_TYPES = {"pothole", "crack"}
+
 
 @dataclass
 class EmergencyEvent:
@@ -61,6 +67,8 @@ class EmergencyResponder:
         if cluster.cluster_id in self._notified_clusters:
             return None
         if not cluster.escalated:
+            return None
+        if cluster.hazard_type in ROUTINE_HAZARD_TYPES:
             return None
         if not (impact_confirmed or cluster.hazard_type in COLLISION_HAZARD_TYPES):
             return None

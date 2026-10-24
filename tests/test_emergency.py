@@ -3,7 +3,7 @@ from software.wimesh.mesh_network import HazardClusterVerifier
 from software.wimesh.protocol import HazardAlertPacket
 
 
-def make_packet(vehicle_id, confidence=0.9, hazard_type="pothole"):
+def make_packet(vehicle_id, confidence=0.9, hazard_type="debris"):
     return HazardAlertPacket.new_alert(
         vehicle_id=vehicle_id,
         hazard_type=hazard_type,
@@ -59,3 +59,16 @@ def test_emergency_is_only_fired_once_per_cluster():
     responder.evaluate(cluster, impact_confirmed=True)
 
     assert len(fired) == 1
+
+
+def test_corroborated_pothole_with_impact_is_not_an_emergency():
+    verifier = HazardClusterVerifier()
+    broadcasts = []
+    responder = EmergencyResponder(broadcast_fn=broadcasts.append)
+
+    verifier.ingest(make_packet("VEH-001", hazard_type="pothole"))
+    cluster = verifier.ingest(make_packet("VEH-002", hazard_type="pothole"))
+
+    assert cluster.escalated is True  # still a trusted hazard cluster
+    assert responder.evaluate(cluster, impact_confirmed=True) is None
+    assert broadcasts == []

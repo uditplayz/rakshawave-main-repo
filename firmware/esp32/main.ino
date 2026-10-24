@@ -13,7 +13,7 @@
   Pin map (ESP32-C3-DevKitM-1, U4):
     I2C   SDA=IO5  SCL=IO6
     SPI   SCK=IO18 MISO=IO19 MOSI=IO7 NSS=IO4  RST=IO0 DIO0=IO8
-    GPS   RX=IO20  TX=IO21
+    GPS   RX=IO2   TX=IO1   (UART1; IO20/IO21 stay free for the USB-UART console)
     Buzzer=IO9 (active low)   LED=IO10 (active low)
 
   USB serial protocol (matches software/wimesh/protocol.py + LoRaNode):
@@ -47,8 +47,8 @@
 #define LORA_SS_PIN     4
 #define LORA_RST_PIN    0
 #define LORA_DIO0_PIN   8
-#define GPS_RX_PIN     20
-#define GPS_TX_PIN     21
+#define GPS_RX_PIN      2   // from GPS TX; idle-high also keeps the IO2 strap high
+#define GPS_TX_PIN      1
 #define BUZZER_PIN      9
 #define LED_PIN        10
 #define LORA_FREQ_HZ  433E6
@@ -82,6 +82,7 @@ const unsigned long ALERT_DURATION_MS = 1500;
 
 String serialLine;
 const size_t SERIAL_LINE_MAX = 400;
+const size_t LORA_MAX_FRAME = 255;  // SX127x FIFO / LoRa payload limit
 
 void showText(const char* line1, const char* line2) {
   if (!oledOk) return;
@@ -108,7 +109,22 @@ void alertOff() {
   showText("RakshaWave", "monitoring");
 }
 
+// Push-to-talk voice chunks are not hazards: no buzzer, no LED, just a note on
+// the OLED. (The Pi's voice node does the audio; this board is only the modem.)
+bool isVoiceLine(const String &line) {
+  return line.indexOf("\"t\":\"VOICE\"") >= 0;
+}
+
+unsigned long voiceNoteOffAtMs = 0;
+const unsigned long VOICE_NOTE_MS = 1200;
+
+void voiceNote(const char* title) {
+  voiceNoteOffAtMs = millis() + VOICE_NOTE_MS;
+  if (alertOffAtMs == 0) showText(title, "push-to-talk");  // never cover a hazard alert
+}
+
 void setup() {
+  Serial.setRxBufferSize(1024);  // a blocking LoRa TX must not overflow the Pi's next line
   Serial.begin(115200);
 
   pinMode(BUZZER_PIN, OUTPUT);
@@ -204,6 +220,15 @@ void broadcastHazardAlert(float confidence, float lat, float lon, float speedKmh
 // A full JSON line arrived from the Raspberry Pi: put it on the air.
 void handleSerialLine(const String &line) {
   if (line.length() == 0 || line[0] != '{') return;
+  if (line.length() > LORA_MAX_FRAME) {
+    Serial.println("ERR line too long for a LoRa frame");
+    return;
+  }
+  if (isVoiceLine(line)) {
+    loraSend(line);
+    voiceNote("VOICE TX");
+    return;
+  }
 
   StaticJsonDocument<384> doc;
   const char* hz = "hazard";
@@ -239,6 +264,11 @@ void pollLora() {
   }
   Serial.println(received);  // bare JSON, no prefix (LoRaNode.poll_serial decodes it)
 
+  if (isVoiceLine(received)) {
+    voiceNote("VOICE RX");
+    return;
+  }
+
   StaticJsonDocument<384> doc;
   const char* hz = "hazard";
   if (deserializeJson(doc, received) == DeserializationError::Ok) {
@@ -255,18 +285,6 @@ void loop() {
 
   float magnitudeG, gyroDps;
   bool impact = readImpact(magnitudeG, gyroDps);
-#ifdef RW_DEBUG_IMU
-  static unsigned long lastImuLogMs = 0;
-  if (millis() - lastImuLogMs >= 1000) {
-    lastImuLogMs = millis();
-    Serial.print("IMU mag=");
-    Serial.print(magnitudeG, 3);
-    Serial.print(" g gyro=");
-    Serial.print(gyroDps, 1);
-    Serial.print(" dps impact=");
-    Serial.println(impact ? 1 : 0);
-  }
-#endif
 
   if (impact && gps.location.isValid() && (millis() - lastBroadcastMs) > BROADCAST_COOLDOWN_MS) {
     bool reliableFix = gps.hdop.isValid() ? (gps.hdop.hdop() <= GPS_MAX_HDOP) : false;
@@ -288,6 +306,9 @@ void loop() {
   if (alertOffAtMs != 0 && (long)(millis() - alertOffAtMs) >= 0) {
     alertOffAtMs = 0;
     alertOff();
+  } else if (voiceNoteOffAtMs != 0 && alertOffAtMs == 0 && (long)(millis() - voiceNoteOffAtMs) >= 0) {
+    voiceNoteOffAtMs = 0;
+    showText("RakshaWave", "monitoring");
   }
 
   delay(10);

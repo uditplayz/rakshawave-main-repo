@@ -85,8 +85,23 @@ def extract(path: str):
     for j in kids(root, "junction"):
         at = kid(j, "at")
         find(_key(float(at[1]), float(at[2])))
-    # wire endpoints landing mid-wire are joined only via junctions in KiCad,
-    # so no T-detection here on purpose.
+    # KiCad also connects a wire end / pin that lands on the interior of another
+    # wire segment (a "T"), so merge those too. Pure crossings stay separate.
+    segs = []
+    for w in kids(root, "wire"):
+        xy = [(float(p[1]), float(p[2])) for p in kids(kid(w, "pts"), "xy")]
+        segs.append((xy[0], xy[1]))
+
+    def on_segment(pt, a, b):
+        (x, y), (x1, y1), (x2, y2) = pt, a, b
+        if abs((x2 - x1) * (y - y1) - (y2 - y1) * (x - x1)) > 0.01:
+            return False
+        return min(x1, x2) - 0.01 <= x <= max(x1, x2) + 0.01 and min(y1, y2) - 0.01 <= y <= max(y1, y2) + 0.01
+
+    def tie_to_wires(pt):
+        for a, b in segs:
+            if pt not in (_key(*a), _key(*b)) and on_segment(pt, a, b):
+                union(pt, _key(*a))
 
     names: list[tuple] = []  # (point, netname)
     for l in kids(root, "label") + kids(root, "global_label"):
@@ -127,6 +142,13 @@ def extract(path: str):
             else:
                 pin_at[pt].append((ref, num, pname))
 
+    for a, b in segs:
+        tie_to_wires(_key(*a))
+        tie_to_wires(_key(*b))
+    for pt in list(pin_at):
+        tie_to_wires(pt)
+    for pt, _nm in names:
+        tie_to_wires(pt)
     for pt, nm in names:
         union(pt, ("NET", nm))
 

@@ -1,0 +1,1 @@
+{"t":"VOICE","veh":"VEH-PI-01","sid":"552585","q":0,"e":0,"c":"700C","d":"bpVjgG6VY4BulWOQbpVjgG6VY4BulWOAbpVjgG6VY5BulWOAbpVjgG6VY4BulWOAbpVjkG6VY4BulWOAbpVjgG6VY4BulWOQbpVjgG6VY4A=","hop":0,"mh":0,"ttl":10.0}

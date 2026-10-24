@@ -8,9 +8,7 @@
       "id": "esp",
       "top": 0,
       "left": 0,
-      "attrs": {
-        "serialInterface": "USB_SERIAL_JTAG"
-      }
+      "attrs": {}
     },
     {
       "type": "wokwi-mpu6050",
@@ -71,6 +69,18 @@
     }
   ],
   "connections": [
+    [
+      "esp:TX",
+      "$serialMonitor:RX",
+      "",
+      []
+    ],
+    [
+      "esp:RX",
+      "$serialMonitor:TX",
+      "",
+      []
+    ],
     [
       "esp:5",
       "imu:SDA",
@@ -168,13 +178,13 @@
       []
     ],
     [
-      "esp:RX",
+      "esp:2",
       "gps:TX",
       "green",
       []
     ],
     [
-      "esp:TX",
+      "esp:1",
       "gps:RX",
       "blue",
       []
@@ -219,6 +229,12 @@
       "d1:C",
       "esp:10",
       "magenta",
+      []
+    ],
+    [
+      "esp:GND.1",
+      "imu:AD0",
+      "black",
       []
     ]
   ],

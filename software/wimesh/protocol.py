@@ -15,6 +15,7 @@ constrained settings):
 
 from __future__ import annotations
 
+import base64
 import json
 import time
 import uuid
@@ -35,6 +36,7 @@ class PacketType(str, Enum):
     CORROBORATION = "CORROBORATION"     # a vehicle confirming a nearby vehicle's alert
     HEARTBEAT = "HEARTBEAT"             # lightweight presence/position beacon
     EMERGENCY = "EMERGENCY"             # escalated alert -> emergency response
+    VOICE = "VOICE"                     # push-to-talk voice chunk (see VoicePacket)
 
 
 @dataclass
@@ -151,3 +153,104 @@ class HazardAlertPacket:
         d = asdict(self)
         d["packet_type"] = self.packet_type.value
         return d
+
+
+# LoRa frames carry at most 255 bytes; VoicePacket.encode() enforces it.
+LORA_MAX_FRAME_BYTES = 255
+VOICE_TTL_S = 10.0
+# Push-to-talk is local: relaying voice would eat the shared airtime of every
+# node in range, so it is not relayed unless a caller opts in.
+VOICE_DEFAULT_MAX_HOPS = 0
+
+
+@dataclass
+class VoicePacket:
+    """One chunk of a push-to-talk transmission (Codec2 frames).
+
+    Same relay/dedupe interface as HazardAlertPacket (`packet_id`,
+    `vehicle_id`, `hop_count`, `can_relay()`, `relayed()`), so LoRaNode and
+    the mesh bus handle it unchanged."""
+
+    vehicle_id: str
+    stream_id: str          # one per key-down, groups the chunks of one transmission
+    seq: int                # chunk index within the stream, from 0
+    payload: bytes          # whole Codec2 frames
+    last: bool = False      # key released: stream ends after this chunk
+    codec: str = "700C"
+    hop_count: int = 0
+    max_hops: int = VOICE_DEFAULT_MAX_HOPS
+    ttl_expires_at: float = field(default_factory=lambda: time.time() + VOICE_TTL_S)
+    packet_type: PacketType = PacketType.VOICE
+
+    @property
+    def packet_id(self) -> str:
+        return f"{self.stream_id}-{self.seq}"
+
+    def is_expired(self) -> bool:
+        return time.time() > self.ttl_expires_at
+
+    def can_relay(self) -> bool:
+        return not self.is_expired() and self.hop_count < self.max_hops
+
+    def relayed(self) -> "VoicePacket":
+        clone = VoicePacket(**{k: getattr(self, k) for k in self.__dataclass_fields__})
+        clone.hop_count += 1
+        return clone
+
+    def encode(self) -> bytes:
+        payload = {
+            "t": PacketType.VOICE.value,
+            "veh": self.vehicle_id,
+            "sid": self.stream_id,
+            "q": self.seq,
+            "e": 1 if self.last else 0,
+            "c": self.codec,
+            "d": base64.b64encode(self.payload).decode("ascii"),
+            "hop": self.hop_count,
+            "mh": self.max_hops,
+            "ttl": VOICE_TTL_S,  # relative, like the ESP32's packets
+        }
+        raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        if len(raw) > LORA_MAX_FRAME_BYTES:
+            raise ValueError(f"voice packet is {len(raw)} bytes, LoRa frame limit is {LORA_MAX_FRAME_BYTES}")
+        return raw
+
+    @classmethod
+    def decode(cls, raw: bytes) -> "VoicePacket":
+        payload = json.loads(raw.decode("utf-8"))
+        if payload["t"] != PacketType.VOICE.value:
+            raise ValueError("not a VOICE packet")
+        ttl = payload["ttl"]
+        if ttl < _EPOCH_THRESHOLD_S:
+            ttl = time.time() + ttl
+        return cls(
+            vehicle_id=payload["veh"],
+            stream_id=payload["sid"],
+            seq=payload["q"],
+            payload=base64.b64decode(payload["d"]),
+            last=bool(payload["e"]),
+            codec=payload["c"],
+            hop_count=payload["hop"],
+            max_hops=payload["mh"],
+            ttl_expires_at=ttl,
+        )
+
+    def to_dict(self) -> dict:
+        return {
+            "packet_id": self.packet_id,
+            "packet_type": PacketType.VOICE.value,
+            "vehicle_id": self.vehicle_id,
+            "stream_id": self.stream_id,
+            "seq": self.seq,
+            "last": self.last,
+            "codec": self.codec,
+            "bytes": len(self.payload),
+            "hop_count": self.hop_count,
+        }
+
+
+def decode_packet(raw: bytes):
+    """Decode one wire line into a HazardAlertPacket or a VoicePacket."""
+    if json.loads(raw.decode("utf-8")).get("t") == PacketType.VOICE.value:
+        return VoicePacket.decode(raw)
+    return HazardAlertPacket.decode(raw)
