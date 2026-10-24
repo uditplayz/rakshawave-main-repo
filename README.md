@@ -148,6 +148,29 @@ pytest    # unit tests for fusion, WiMesh protocol, mesh clustering, emergency e
 
 ---
 
+## Live phone-to-phone demo (PWA)
+
+Open the site on two phones; a hazard reported on one shows up on the other in real time,
+gets verified by the connected phones (quorum of up to 3 nodes), and then alerts the driver.
+
+```bash
+pip install -r server/requirements.txt
+uvicorn server.app:app --host 0.0.0.0 --port 8000
+```
+
+**Get a public HTTPS URL** (needed so phones can reach it and to "Add to Home Screen"):
+
+| Option | How |
+|---|---|
+| Quick, no account | `cloudflared tunnel --url http://localhost:8000` (or `ngrok http 8000`) and open the printed `https://...` URL on both phones |
+| Hosted | Push to GitHub, then Render > New > Blueprint (uses `render.yaml`). Free instances sleep after idle, so open the URL once before the demo |
+
+**Test:** open the URL on phone A and B, finish pairing on each, then on A tap Report > Fog.
+B shows "Verifying 1/2" then a Dense-fog banner. Report an Accident for the full-screen critical alert.
+Settings > Demo shows the live device count. `Simulator/index.html` is the offline two-phone simulator.
+
+---
+
 ## Repository layout
 
 ```
@@ -160,7 +183,10 @@ pytest    # unit tests for fusion, WiMesh protocol, mesh clustering, emergency e
 │   ├── core/{vehicle_node,emergency}.py
 │   ├── simulator/simulate_fleet.py
 │   └── api/server.py          # FastAPI REST + WebSocket
-├── ui/index.html              # offline two-phone mobile app demo (open directly, no backend)
+├── ui/                        # RakshaWave PWA (index.html, manifest, service worker, icons)
+├── server/app.py              # realtime relay: WebSocket hazard sharing + serves the PWA
+├── Simulator/index.html       # offline two-phone simulator (scripted scenarios, no server)
+├── render.yaml                # one-click hosting blueprint (Render)
 ├── firmware/esp32/main.ino    # ESP32-C3 + MPU6050 + GPS + LoRa firmware
 ├── tests/                     # pytest unit tests
 ├── v2v 1.2.kicad_*            # KiCad schematic + PCB (Pi 5 HAT)

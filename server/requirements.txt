@@ -1,0 +1,4 @@
+# Minimal deps to host the RakshaWave realtime relay + PWA (no CV / hardware libs).
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+websockets>=12.0
