@@ -25,6 +25,11 @@ from typing import Optional
 from software.config import WiMeshConfig, settings
 
 
+# Values below this (~11.6 days as epoch seconds) are not Unix timestamps:
+# they are relative TTLs / device uptime from clockless nodes (the ESP32).
+_EPOCH_THRESHOLD_S = 1_000_000
+
+
 class PacketType(str, Enum):
     HAZARD_ALERT = "HAZARD_ALERT"       # a vehicle reporting a verified hazard
     CORROBORATION = "CORROBORATION"     # a vehicle confirming a nearby vehicle's alert
@@ -117,6 +122,15 @@ class HazardAlertPacket:
     @classmethod
     def decode(cls, raw: bytes) -> "HazardAlertPacket":
         payload = json.loads(raw.decode("utf-8"))
+        now = time.time()
+        # The ESP32 has no wall clock: it sends "ttl" as relative seconds-to-live
+        # and "ts" as uptime. Anything below the epoch threshold is rebased to now.
+        ttl = payload["ttl"]
+        if ttl < _EPOCH_THRESHOLD_S:
+            ttl = now + ttl
+        created_at = payload["ts"]
+        if created_at < _EPOCH_THRESHOLD_S:
+            created_at = now
         return cls(
             packet_id=payload["id"],
             packet_type=PacketType(payload["t"]),
@@ -128,9 +142,9 @@ class HazardAlertPacket:
             speed_kmh=payload["spd"],
             hop_count=payload["hop"],
             max_hops=payload["mh"],
-            ttl_expires_at=payload["ttl"],
+            ttl_expires_at=ttl,
             origin_event_id=payload.get("oid"),
-            created_at=payload["ts"],
+            created_at=created_at,
         )
 
     def to_dict(self) -> dict:

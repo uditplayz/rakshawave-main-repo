@@ -1,0 +1,94 @@
+* RakshaWave power path: Li-Ion -> TPS63001 buck-boost -> +3.3V rail
+* Source of truth: "v2v 1.2  .kicad_sch" (after the net fixes in this repo)
+*
+*   BAT+ --R_bat-- Vbat      C2 (4.7u) and C4 (10u) at U7.VIN
+*   BAT+ --R4(100R)-- VINA   C3 (0.1u) at U7.VINA       (analog supply filter)
+*   U7 VOUT/FB -> +3.3V      C5, C6 = 2 x 10u            (output caps)
+*
+* The switcher is an AVERAGED behavioural model (no switching ripple, no
+* RHP zero): a PI-controlled current source into the output cap, limited to
+* the 1.7 A switch current, with the input current from power balance
+* Iin = Pout / (eff * Vin). Loop crossover is set by FC_LOOP. Ripple-level
+* effects (L1 = 2.2 uH, ~1 MHz) need a switching model and are NOT covered.
+*
+* Run (ngspice batch):  ngspice -b hardware/sim/power_rail.cir
+* The .control block below repeats the transient at 4.2 V / 3.6 V / 3.0 V.
+
+.param VBAT=3.6
+.param RBAT=80m
+.param VOUT_SET=3.3
+.param EFF=0.90
+.param FC_LOOP=50k
+.param COUT_ESR=5m
+* 10 uF / 6.3 V X5R keeps only ~60 % of its capacitance at 3.3 V DC bias
+.param CDERATE=0.6
+.param C_IN_BAT=14.7u
+.param ILIM=1.7
+.param I_VINA=0.3m
+
+* ---- load: states from the firmware / hardware ---------------------------
+*  135 mA  ESP32-C3 active + GPS RX + MPU6050 + OLED
+*  +120 mA LoRa 433 MHz TX burst, +35 mA buzzer + LED  -> 290 mA at t = 2 ms
+Iload vout 0 PWL(0 135m 2m 135m 2.001m 290m 8m 290m 8.001m 135m 10m 135m)
+
+* ---- battery ---------------------------------------------------------------
+Vbat batt 0 {VBAT}
+Rbat batt bat+ {RBAT}
+C2 bat+ 0 4.7u
+C4 bat+ 0 10u
+
+* ---- analog supply filter on VINA (R4 = 100R, C3 = 0.1u) -------------------
+R4 bat+ vina 100
+C3 vina 0 0.1u
+Iq_vina vina 0 {I_VINA}
+
+* ---- buck-boost, averaged ----------------------------------------------------
+* PI loop: gm = 2*pi*FC*Cout_eff, integral gain puts the zero at FC/5.
+.param COUT_EFF={2*10u*CDERATE}
+.param GM={6.2832*FC_LOOP*COUT_EFF}
+.param KI={GM*6.2832*(FC_LOOP/5)}
+Bint 0 int I={KI*(VOUT_SET - v(vout))}
+Cint int 0 1 IC=0.135
+Rint int 0 1e9
+* current command (A as volts); the converter is only specified down to Vin = 1.8 V,
+* well below the 3.0 V battery cutoff used in every corner here
+Bcmd icmd 0 V={min(max(GM*(VOUT_SET - v(vout)) + v(int), 0), ILIM)}
+Breg 0 vout I=v(icmd)
+Bin bat+ 0 I={ v(vout)*v(icmd)/(EFF*max(v(bat+), 1.0)) }
+
+* ---- output: C5 + C6 (2 x 10u, derated) with ESR -------------------------
+C5 vout c5x {10u*CDERATE}
+R5e c5x 0 {COUT_ESR}
+C6 vout c6x {10u*CDERATE}
+R6e c6x 0 {COUT_ESR}
+
+* Start from the settled DC point so the t < 2 ms region is flat.
+.ic v(vout)={VOUT_SET} v(bat+)={VBAT} v(vina)={VBAT}
+
+.options reltol=1e-4 abstol=1n vntol=10u method=gear
+.tran 0.5u 10m 0 0.25u uic
+
+* ---- measurements -----------------------------------------------------------
+.meas tran vout_min   MIN v(vout) from=1.9m to=10m
+.meas tran vout_pre   AVG v(vout) from=1m   to=1.9m
+.meas tran vout_end   AVG v(vout) from=7m   to=8m
+.meas tran vina_min   MIN v(vina) from=1.9m to=10m
+.meas tran vina_pre   AVG v(vina) from=1m   to=1.9m
+.meas tran vbat_min   MIN v(bat+) from=1.9m to=10m
+.meas tran vout_peak  MAX v(vout) from=8m   to=10m
+
+.control
+  set filetype=ascii
+  foreach corner 4.2 3.6 3.0
+    alter Vbat dc = $corner
+    * keep the .ic consistent with the corner
+    tran 0.5u 10m 0 0.25u uic
+    meas tran vout_min MIN v(vout) from=1.9m to=10m
+    meas tran vout_end AVG v(vout) from=7m to=8m
+    meas tran vina_min MIN v(vina) from=1.9m to=10m
+    meas tran vbat_min MIN v(bat+) from=1.9m to=10m
+    print $corner vout_min vout_end vina_min vbat_min
+  end
+.endc
+
+.end

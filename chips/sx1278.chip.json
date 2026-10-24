@@ -1,0 +1,6 @@
+{
+  "name": "SX1278 LoRa",
+  "author": "RakshaWave",
+  "pins": ["VCC", "GND", "SCK", "MISO", "MOSI", "NSS", "RST", "DIO0"],
+  "controls": []
+}

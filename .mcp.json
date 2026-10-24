@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "rakshawave-hil": {
+      "command": "python",
+      "args": ["-m", "software.mcp_bridge"]
+    },
+    "wokwi": {
+      "command": "wokwi-cli",
+      "args": ["mcp"],
+      "env": { "WOKWI_CLI_TOKEN": "${WOKWI_CLI_TOKEN}" }
+    }
+  }
+}

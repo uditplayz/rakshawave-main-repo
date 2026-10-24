@@ -1,0 +1,15 @@
+[wokwi]
+version = 1
+firmware = '.pio/build/wokwi/firmware.bin'
+elf = '.pio/build/wokwi/firmware.elf'
+
+# Custom chips: build with
+#   wokwi-cli chip compile chips/sx1278.c   -o chips/sx1278.chip.wasm
+#   wokwi-cli chip compile chips/gps_nmea.c -o chips/gps_nmea.chip.wasm
+[[chip]]
+name = 'sx1278'
+binary = 'chips/sx1278.chip.wasm'
+
+[[chip]]
+name = 'gps_nmea'
+binary = 'chips/gps_nmea.chip.wasm'
