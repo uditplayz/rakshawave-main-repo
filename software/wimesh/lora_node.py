@@ -16,7 +16,7 @@ from collections import OrderedDict
 from typing import Callable, Optional
 
 from software.config import WiMeshConfig, settings
-from software.wimesh.protocol import HazardAlertPacket
+from software.wimesh.protocol import HazardAlertPacket, VoicePacket, decode_packet
 
 # How many recently-seen packet_ids each node remembers, purely to stop
 # flood-relay storms on a densely connected mesh (every node hearing
@@ -36,6 +36,7 @@ class LoRaNode:
         self._serial = None
         self._bus = mesh_bus  # in-process simulation bus
         self._on_receive: Optional[Callable[[HazardAlertPacket], None]] = None
+        self._on_voice: Optional[Callable[[VoicePacket], None]] = None
         self._seen_packet_ids: "OrderedDict[str, float]" = OrderedDict()
 
         if mesh_bus is None:
@@ -57,7 +58,14 @@ class LoRaNode:
         if self._bus is not None:
             self._bus.subscribe(self.vehicle_id, self._handle_incoming)
 
-    def broadcast(self, packet: HazardAlertPacket) -> None:
+    def on_voice(self, callback: Callable[[VoicePacket], None]) -> None:
+        """Register a callback for push-to-talk voice chunks (kept apart from
+        hazard alerts so voice never reaches the hazard pipeline)."""
+        self._on_voice = callback
+        if self._bus is not None:
+            self._bus.subscribe(self.vehicle_id, self._handle_incoming)
+
+    def broadcast(self, packet) -> None:
         """Send a packet over the air (or onto the simulated bus)."""
         if self._serial is not None:
             self._serial.write(packet.encode() + b"\n")
@@ -81,7 +89,7 @@ class LoRaNode:
             if not line:
                 break
             try:
-                packet = HazardAlertPacket.decode(line)
+                packet = decode_packet(line)
             except Exception:
                 continue
             self._handle_incoming(packet)
@@ -105,8 +113,10 @@ class LoRaNode:
         first_time_seen = not self._already_seen(packet.packet_id)
         self._remember(packet.packet_id)
 
-        if first_time_seen and self._on_receive:
-            self._on_receive(packet)
+        if first_time_seen:
+            handler = self._on_voice if isinstance(packet, VoicePacket) else self._on_receive
+            if handler:
+                handler(packet)
 
         # Multi-hop relay: forward on only the first time we see it, and
         # only if it still has hops/TTL budget left.

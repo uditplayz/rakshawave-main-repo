@@ -82,6 +82,7 @@ const unsigned long ALERT_DURATION_MS = 1500;
 
 String serialLine;
 const size_t SERIAL_LINE_MAX = 400;
+const size_t LORA_MAX_FRAME = 255;  // SX127x FIFO / LoRa payload limit
 
 void showText(const char* line1, const char* line2) {
   if (!oledOk) return;
@@ -108,7 +109,22 @@ void alertOff() {
   showText("RakshaWave", "monitoring");
 }
 
+// Push-to-talk voice chunks are not hazards: no buzzer, no LED, just a note on
+// the OLED. (The Pi's voice node does the audio; this board is only the modem.)
+bool isVoiceLine(const String &line) {
+  return line.indexOf("\"t\":\"VOICE\"") >= 0;
+}
+
+unsigned long voiceNoteOffAtMs = 0;
+const unsigned long VOICE_NOTE_MS = 1200;
+
+void voiceNote(const char* title) {
+  voiceNoteOffAtMs = millis() + VOICE_NOTE_MS;
+  if (alertOffAtMs == 0) showText(title, "push-to-talk");  // never cover a hazard alert
+}
+
 void setup() {
+  Serial.setRxBufferSize(1024);  // a blocking LoRa TX must not overflow the Pi's next line
   Serial.begin(115200);
 
   pinMode(BUZZER_PIN, OUTPUT);
@@ -204,6 +220,15 @@ void broadcastHazardAlert(float confidence, float lat, float lon, float speedKmh
 // A full JSON line arrived from the Raspberry Pi: put it on the air.
 void handleSerialLine(const String &line) {
   if (line.length() == 0 || line[0] != '{') return;
+  if (line.length() > LORA_MAX_FRAME) {
+    Serial.println("ERR line too long for a LoRa frame");
+    return;
+  }
+  if (isVoiceLine(line)) {
+    loraSend(line);
+    voiceNote("VOICE TX");
+    return;
+  }
 
   StaticJsonDocument<384> doc;
   const char* hz = "hazard";
@@ -238,6 +263,11 @@ void pollLora() {
     received += (char)LoRa.read();
   }
   Serial.println(received);  // bare JSON, no prefix (LoRaNode.poll_serial decodes it)
+
+  if (isVoiceLine(received)) {
+    voiceNote("VOICE RX");
+    return;
+  }
 
   StaticJsonDocument<384> doc;
   const char* hz = "hazard";
@@ -276,6 +306,9 @@ void loop() {
   if (alertOffAtMs != 0 && (long)(millis() - alertOffAtMs) >= 0) {
     alertOffAtMs = 0;
     alertOff();
+  } else if (voiceNoteOffAtMs != 0 && alertOffAtMs == 0 && (long)(millis() - voiceNoteOffAtMs) >= 0) {
+    voiceNoteOffAtMs = 0;
+    showText("RakshaWave", "monitoring");
   }
 
   delay(10);

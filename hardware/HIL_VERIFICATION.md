@@ -11,8 +11,10 @@ below is claimed as verified unless the "Evidence" column says it ran.
 | Firmware pin map / serial protocol / TTL | Compiles for ESP32-C3 and runs in Wokwi on the real-board pin map (UART0 console) | `pio run`, Wokwi scenario |
 | Wokwi twin (ESP32-C3, MPU6050, SSD1306, SX1278 + GPS custom chips, buzzer, LED) | **Boots and passes** `tests/wokwi/hil.test.yaml` | `hardware/run_hil.py`, `hardware/oled_alert.png` |
 | Power rail transient | Simulated in ngspice 47 | `hardware/sim/power_rail.cir`, `power_rail_results.txt` |
-| Python stack as MCP server | Built, 25 tests pass | `software/mcp_bridge.py`, `tests/test_mcp_bridge.py` |
-| Full HIL chain (Wokwi -> bridge -> mesh) | 13/13 checks pass | `python hardware/run_hil.py` |
+| Python stack as MCP server | Built, 42 tests pass | `software/mcp_bridge.py`, `tests/test_mcp_bridge.py` |
+| Full HIL chain (Wokwi -> bridge -> mesh) | 18/18 checks pass | `python hardware/run_hil.py` |
+| KiCad ERC + KiCad-extracted nets | Clean apart from 4 accepted items | `python hardware/kicad_check.py` (KiCad 10.0.6 CLI) |
+| Push-to-talk voice | Software + modem path tested; audio hardware untested | `hardware/PTT.md`, `tests/test_ptt.py`, `tests/wokwi/ptt.test.yaml` |
 | `ltspice-mcp` server | **Not installed** | unverified package; ngspice driven directly |
 
 ## 1. Schematic (`v2v 1.2  .kicad_sch`)
@@ -38,7 +40,8 @@ Second pass (pin clash and MPU6050), also checked by net extraction:
   The caps sit in a block at the left edge of the sheet; **place them at the
   pins when the PCB is laid out.** The values are the usual MPU-6050 typical-circuit
   values from memory: the datasheet could not be fetched here, so check section 7.2/7.3
-  of the InvenSense PS-MPU-6000A before fabrication.
+  of the InvenSense PS-MPU-6000A before fabrication. The PDF supplied later (RM-MPU-6000A-00 rev 4.2) is the
+  *register map*; it has no circuit or capacitor information, so the values are still unverified.
 
 ## 2. Pin map as implemented
 
@@ -134,11 +137,26 @@ Run with a real ESP32-format packet and a synthetic 640x480 pothole frame:
 - Not done (optional): LoRa receive in the SX1278 chip / two-board link, and a
   switching-level TPS63001 model for ripple.
 
+## 6c. KiCad CLI check
+
+`python hardware/kicad_check.py` runs ERC and exports the netlist with `kicad-cli` (10.x, the version that saved the file),
+then asserts the nets that matter (rails, GPS on IO1/IO2, MPU pins, PTT and I2S nets). The first run found 59 violations;
+the fixes were no-connect flags on unused Pi header pins, PWR_FLAGs on `GND`, `BAT+`, `+5V_PI` and the filtered `VINA`
+net, grid alignment of the decoupling block, and removal of a dead wire branch left from the old LED wiring (the KiCad
+net lists before and after are identical). Accepted on purpose, listed in `KNOWN`:
+
+- **U4 3V3 / U7 VOUT power-output conflict**: the DevKit's 3V3 pin is fed from the HAT rail. This is a real hazard: do not
+  power the DevKit from USB (its LDO would fight the HAT regulator) while the HAT rail is on, or add an ideal-diode/jumper.
+- Pi header symbol not in the stock library, and two cosmetic embedded-resistor mismatches.
+
+Also found while checking the supplied datasheet: nothing in it contradicts the pin wiring, but it cannot confirm the
+capacitor values.
+
 ## 7. Reproduce
 
 ```bash
 python -m pytest -q
-python hardware/sim/netlist_check.py "v2v 1.2  .kicad_sch" --net +3.3V BAT+
+python hardware/kicad_check.py        # KiCad ERC + nets (needs KiCad 10 CLI)
 ngspice -b hardware/sim/power_rail.cir
 
 pio run                               # builds .pio/build/esp32-c3-devkitm-1/firmware.{bin,elf}

@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from software import mcp_bridge as bridge  # noqa: E402
+from software.wimesh.protocol import VoicePacket  # noqa: E402
 
 SERIAL_LOG = ROOT / "hardware" / "wokwi_serial.log"
 checks: list[tuple[str, bool, str]] = []
@@ -56,6 +57,32 @@ def run_wokwi() -> str:
     check("Wokwi scenario (boot, spike, buzzer/LED pins, OLED)", proc.returncode == 0,
           "scenario completed" if proc.returncode == 0 else (proc.stdout + proc.stderr)[-400:])
     return SERIAL_LOG.read_text()
+
+
+def run_ptt() -> None:
+    """Push-to-talk: the Pi writes a VoicePacket line to the ESP32 modem, then a full Pi-side talk."""
+    sample = (ROOT / "hardware" / "ptt_sample_line.txt").read_bytes().strip()
+    exe = find_wokwi()
+    if exe and os.environ.get("WOKWI_CLI_TOKEN"):
+        proc = subprocess.run([exe, "--timeout", "30000", "--scenario", "tests/wokwi/ptt.test.yaml", "."],
+                              cwd=ROOT, capture_output=True, text=True)
+        check("Wokwi PTT scenario (voice TX silent, long line refused, hazard still alerts)", proc.returncode == 0,
+              "scenario completed" if proc.returncode == 0 else (proc.stdout + proc.stderr)[-400:])
+        m = re.search(r"\[sx1278\] TX #1 (\d+) bytes: (\{.*\})", proc.stdout)
+        ok = bool(m) and m.group(2).encode() == sample and int(m.group(1)) == len(sample)
+        check("ESP32 put the voice chunk on LoRa byte for byte", ok, f"{m.group(1)} bytes" if m else "no TX seen")
+        if ok:
+            pkt = VoicePacket.decode(m.group(2).encode())
+            check("Transmitted voice frame decodes (Codec2 700C, fits 255 B)", pkt.codec == "700C" and len(sample) <= 255,
+                  f"{len(pkt.payload)} B of speech = {len(pkt.payload) // 4 * 40} ms")
+    bridge.reset_bench()
+    bridge.simulate_corroborating_peer("VEH-NEAR", "pothole", 18.5204, 73.8567, 300)
+    talk = bridge.ptt_talk("VEH-A", 18.5204, 73.8567, seconds=3.0)
+    near = talk["listeners"]["VEH-NEAR"]
+    check("PTT: 3 s of speech reaches a vehicle 300 m away intact", near["complete"] and near["audible"],
+          f"{talk['packets']} packets, {talk['airtime_s']} s airtime, played {near['played_s']} s")
+    check("PTT: airtime is below real time (can keep up with live speech)", talk["airtime_s"] < talk["talked_s"],
+          f"{talk['airtime_s']} s airtime for {talk['talked_s']} s of speech")
 
 
 def main() -> int:
@@ -103,6 +130,8 @@ def main() -> int:
     ctl = bridge.simulate_corroborating_peer("VEH-002", "debris", pkt["lat"], pkt["lon"], 12)
     check("Control: corroborated debris raises an EMERGENCY broadcast",
           len(ctl["emergencies"]) == 1 and len(bridge.get_mesh_state()["emergency_broadcasts"]) == 1)
+
+    run_ptt()
 
     failed = [c for c in checks if not c[1]]
     print(f"\n{len(checks) - len(failed)}/{len(checks)} checks passed")

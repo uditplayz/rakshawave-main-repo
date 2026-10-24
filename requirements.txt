@@ -24,3 +24,8 @@ pytest>=8.2.0
 # HIL bench: MCP bridge (software/mcp_bridge.py) and ESP32 firmware build
 mcp>=1.2,<2
 platformio>=6.1
+
+# Push-to-talk voice (hardware only: sounddevice, gpiozero)
+pycodec2>=4.0
+sounddevice>=0.4; platform_system == "Linux"
+gpiozero>=2.0; platform_system == "Linux"

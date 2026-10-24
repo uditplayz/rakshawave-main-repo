@@ -98,3 +98,30 @@ def test_corroborated_debris_raises_emergency_broadcast():
 
     assert len(peer["emergencies"]) == 1
     assert len(bridge.get_mesh_state()["emergency_broadcasts"]) == 1
+
+
+def test_ptt_reaches_a_vehicle_in_range_and_not_one_out_of_range():
+    bridge.simulate_corroborating_peer("VEH-NEAR", "pothole", 18.5204, 73.8567, 300)  # registers a listener ~300 m away
+    bridge.simulate_corroborating_peer("VEH-FAR", "pothole", 18.5204, 73.8567, 9000)  # far outside the 1.5 km range
+    result = bridge.ptt_talk("VEH-A", 18.5204, 73.8567, seconds=3.0)
+
+    assert result["ok"] and result["packets"] == 4
+    assert result["max_frame_bytes"] <= 255
+    near, far = result["listeners"]["VEH-NEAR"], result["listeners"]["VEH-FAR"]
+    assert near["complete"] and near["audible"] and near["played_s"] == 3.0
+    assert far["received_chunks"] == 0 and far["audible"] is False
+    # voice is local: it was not relayed, so no extra transmissions
+    assert len([x for x in bridge.get_mesh_state()["tx_log"] if x["type"] == "VOICE"]) == 4
+
+
+def test_ptt_rejects_a_bad_source_and_leaves_the_key_up():
+    result = bridge.ptt_talk("VEH-A", 18.5204, 73.8567, source="no-such-file.wav")
+    assert result["ok"] is False
+    assert bridge.ptt_state()["VEH-A"]["state"] == "idle"
+
+
+def test_mcp_server_exposes_ptt_tools():
+    import asyncio
+
+    names = {t.name for t in asyncio.run(bridge.build_server().list_tools())}
+    assert {"ptt_talk", "ptt_state"} <= names

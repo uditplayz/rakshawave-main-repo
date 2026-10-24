@@ -15,7 +15,7 @@ Tools
     add_relay_nodes / reset_bench  helpers for multi-hop and repeatable runs
 
 The air interface is a `RadioMesh`: the in-process `MeshNetwork` bus plus a
-433 MHz range / packet-loss model (Haversine distance, 0.38 s SF7 airtime
+433 MHz range / packet-loss model (Haversine distance, SF7 time-on-air computed per frame
 per transmission).
 """
 
@@ -39,11 +39,20 @@ from software.sensors.imu import IMUSample
 from software.vision.hazard_detector import HazardDetection, HazardDetector, HazardType
 from software.wimesh.lora_node import LoRaNode
 from software.wimesh.mesh_network import HazardClusterVerifier, MeshNetwork, _haversine_m
+from software.voice import SAMPLE_RATE, PttController, PttReceiver, PttTransmitter
+from software.voice.audio import WavSource
 from software.wimesh.protocol import HazardAlertPacket, PacketType
 
 # ---- radio model ------------------------------------------------------------
 RADIO_RANGE_M = 1500.0       # 433 MHz LoRa, SF7/125 kHz, roadside line of sight
-AIRTIME_S = 0.38             # per transmission (SF7 frame used in the pitch deck)
+SF, BW_HZ, CR, PREAMBLE = 7, 125_000, 1, 8   # SF7 / 125 kHz / CR 4/5, 8-symbol preamble, CRC on
+
+
+def lora_airtime_s(payload_bytes: int) -> float:
+    """Standard LoRa time-on-air (Semtech AN1200.13). 242 B -> 0.38 s, the figure in the study guide."""
+    t_sym = (2**SF) / BW_HZ
+    n_payload = 8 + max(math.ceil((8 * payload_bytes - 4 * SF + 28 + 16) / (4 * SF)) * (CR + 4), 0)
+    return (PREAMBLE + 4.25 + n_payload) * t_sym
 LOSS_FLOOR = 0.02            # packet loss next to the transmitter
 LOSS_AT_EDGE = 0.50          # extra loss at the edge of the range (cubic ramp)
 RNG_SEED = 433
@@ -76,7 +85,8 @@ class RadioMesh(MeshNetwork):
             "packet_id": packet.packet_id,
             "type": PacketType(packet.packet_type).value,
             "hop": packet.hop_count,
-            "airtime_s": AIRTIME_S,
+            "bytes": len(packet.encode()),
+            "airtime_s": round(lora_airtime_s(len(packet.encode())), 3),
             "delivered": [],
             "dropped": [],
         }
@@ -98,12 +108,25 @@ class RadioMesh(MeshNetwork):
             callback(packet)
 
 
+class BenchClock:
+    """Manual clock so jitter / idle timeouts in PTT receivers are deterministic."""
+
+    def __init__(self):
+        self.t = 0.0
+
+    def __call__(self) -> float:
+        return self.t
+
+
 class Bench:
     """All mutable state for one HIL session."""
 
     def __init__(self):
         self.mesh = RadioMesh()
         self.nodes: Dict[str, LoRaNode] = {}
+        self.clock = BenchClock()
+        self.ptt: Dict[str, PttController] = {}
+        self.heard: Dict[str, list] = {}  # vehicle -> list of PCM chunks it played
         self.verifier = HazardClusterVerifier()
         self.responder = EmergencyResponder(broadcast_fn=self._coordinator_broadcast)
         self.emergencies: List[EmergencyEvent] = []
@@ -134,6 +157,14 @@ class Bench:
             node = LoRaNode(vehicle_id=vehicle_id, mesh_bus=self.mesh)
             node.on_receive(lambda _p: None)
             self.nodes[vehicle_id] = node
+            chunks: list = []
+            self.heard[vehicle_id] = chunks
+            ctl = PttController(
+                PttTransmitter(vehicle_id, node.broadcast),
+                PttReceiver(lambda _v, pcm, c=chunks: c.append(pcm), clock=self.clock),
+            )
+            node.on_voice(ctl.on_voice)
+            self.ptt[vehicle_id] = ctl
         return self.nodes[vehicle_id]
 
 
@@ -366,13 +397,13 @@ def get_mesh_state() -> dict:
 
     max_hops = HazardAlertPacket.new_alert("x", "x", 0, 0, 0, 0).max_hops
     return {
-        "radio": {"range_m": bench.mesh.range_m, "airtime_s_per_tx": AIRTIME_S, "max_hops": max_hops},
+        "radio": {"range_m": bench.mesh.range_m, "sf": SF, "bandwidth_hz": BW_HZ, "max_hops": max_hops},
         "positions": {k: [round(v[0], 6), round(v[1], 6)] for k, v in bench.mesh.positions.items()},
         "seen_packet_ids": {vid: list(n._seen_packet_ids.keys()) for vid, n in bench.nodes.items()},
         "packets": per_packet,
         "max_hop_observed": max((p["max_hop"] for p in per_packet.values()), default=0),
         "total_transmissions": len(bench.mesh.tx_log),
-        "total_airtime_s": round(len(bench.mesh.tx_log) * AIRTIME_S, 2),
+        "total_airtime_s": round(sum(x["airtime_s"] for x in bench.mesh.tx_log), 2),
         "tx_log": bench.mesh.tx_log,
         "clusters": [c.to_dict() for c in bench.verifier.clusters],
         "emergency_events": [e.to_dict() for e in bench.emergencies],
@@ -388,6 +419,76 @@ def get_mesh_state() -> dict:
     }
 
 
+# ---- push-to-talk ------------------------------------------------------------------
+def _talk_audio(source: str, seconds: float):
+    if source == "tone":
+        t = np.arange(int(SAMPLE_RATE * seconds)) / SAMPLE_RATE
+        return (6000 * np.sin(2 * np.pi * 220 * t) * (0.6 + 0.4 * np.sin(2 * np.pi * 2 * t))).astype(np.int16)
+    if Path(source).is_file():
+        return WavSource(source, block=10**9).pcm
+    raise ValueError(f"source must be 'tone' or a WAV file path, got {source!r}")
+
+
+def ptt_talk(vehicle_id: str, lat: float, lon: float, seconds: float = 3.0, source: str = "tone") -> dict:
+    """Key the push-to-talk of `vehicle_id` at (lat, lon) and send `seconds` of audio
+    ("tone" = speech-like test signal, or a WAV file path) over the radio model.
+    Every other vehicle on the bench listens; the reply says what each one heard."""
+    bench = _bench
+    bench.node(vehicle_id, lat, lon)
+    ctl = bench.ptt[vehicle_id]
+    if not ctl.press():
+        return {"ok": False, "error": "channel busy", "state": ctl.state.value}
+    try:
+        pcm = _talk_audio(source, seconds)
+    except ValueError as exc:
+        ctl.release()
+        return {"ok": False, "error": str(exc)}
+    tx_before = len(bench.mesh.tx_log)
+    block = SAMPLE_RATE // 5  # 200 ms of mic audio at a time, like the real capture loop
+    for i in range(0, len(pcm), block):
+        if not ctl.audio(pcm[i : i + block]):
+            break
+    ctl.release()
+    sent = bench.mesh.tx_log[tx_before:]
+    for other in bench.ptt.values():  # let jitter windows and idle timeouts expire
+        other.rx.poll()
+    bench.clock.t += 10.0
+    for other in bench.ptt.values():
+        other.rx.poll()
+
+    voice_tx = [x for x in sent if x["type"] == "VOICE"]
+    listeners = {}
+    for rx_id, other in bench.ptt.items():
+        if rx_id == vehicle_id:
+            continue
+        mine = [st for st in other.rx.stats() if st["from"] == vehicle_id]
+        st = mine[-1] if mine else None
+        played = np.concatenate(bench.heard[rx_id]) if bench.heard[rx_id] else np.zeros(0, dtype=np.int16)
+        listeners[rx_id] = {
+            "received_chunks": st["received_chunks"] if st else 0,
+            "lost_chunks": st["lost_chunks"] if st else 0,
+            "played_s": st["played_s"] if st else 0.0,
+            "complete": bool(st and st["complete"]),
+            "audible": bool(len(played) and np.abs(played).max() > 500),
+        }
+    return {
+        "ok": True,
+        "talked_s": round(len(pcm) / SAMPLE_RATE, 2),
+        "packets": len(voice_tx),
+        "max_frame_bytes": max((x["bytes"] for x in voice_tx), default=0),
+        "airtime_s": round(sum(x["airtime_s"] for x in voice_tx), 2),
+        "listeners": listeners,
+    }
+
+
+def ptt_state() -> dict:
+    """Per-vehicle push-to-talk state and what each one has received so far."""
+    return {
+        vid: {"state": ctl.state.value, "streams": ctl.rx.stats()}
+        for vid, ctl in _bench.ptt.items()
+    }
+
+
 # ---- MCP server ------------------------------------------------------------
 def build_server():
     from mcp.server.fastmcp import FastMCP
@@ -400,6 +501,8 @@ def build_server():
         get_mesh_state,
         add_relay_nodes,
         reset_bench,
+        ptt_talk,
+        ptt_state,
     ):
         server.tool()(fn)
     return server
