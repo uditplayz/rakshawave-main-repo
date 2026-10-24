@@ -160,7 +160,7 @@ pytest    # unit tests for fusion, WiMesh protocol, mesh clustering, emergency e
 │   ├── core/{vehicle_node,emergency}.py
 │   ├── simulator/simulate_fleet.py
 │   └── api/server.py          # FastAPI REST + WebSocket
-├── ui/index.html              # live dashboard
+├── ui/index.html              # offline two-phone mobile app demo (open directly, no backend)
 ├── firmware/esp32/main.ino    # ESP32-C3 + MPU6050 + GPS + LoRa firmware
 ├── tests/                     # pytest unit tests
 ├── v2v 1.2.kicad_*            # KiCad schematic + PCB (Pi 5 HAT)

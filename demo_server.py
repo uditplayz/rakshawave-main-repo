@@ -34,7 +34,7 @@ class RakshaWaveHandler(SimpleHTTPRequestHandler):
 
         if parsed.path == '/':
             self.send_response(302)
-            self.send_header('Location', '/mobile.html')
+            self.send_header('Location', '/index.html')
             self.end_headers()
             return
 
@@ -237,9 +237,9 @@ def main():
     print(f"  Server running at http://localhost:{port}")
     print("=" * 70)
     print("\n  Open the mobile UI:")
+    print(f"   -> http://localhost:{port}/index.html  (two-phone mobile demo)")
+    print("\n  Previous mobile prototype:")
     print(f"   -> http://localhost:{port}/mobile.html")
-    print("\n  Open the desktop dashboard:")
-    print(f"   -> http://localhost:{port}/index.html")
     print("\n  API Endpoints:")
     print(f"   -> http://localhost:{port}/api/fleet")
     print(f"   -> http://localhost:{port}/api/events")
