@@ -73,7 +73,7 @@
 <header>
   <div>
     <h1>Raksha<span>Wave</span> — Smart Road Sentinel</h1>
-    <div class="sub">AI-powered road hazard detection &amp; vehicle-to-vehicle safety alert &nbsp;·&nbsp; SIH26220</div>
+    <div class="sub">AI-powered road hazard detection &amp; vehicle-to-vehicle safety alert &nbsp;</div>
   </div>
   <div id="status"><span class="dot"></span><span id="status-text">connecting…</span></div>
 </header>
@@ -123,8 +123,11 @@ const API_BASE = location.origin;
 const WS_URL = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws/fleet";
 
 const map = L.map('map', { zoomControl: true }).setView([18.5204, 73.8567], 14);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-  attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 19
+const CARTO_API_KEY = 'cb1_4tf0_1_60a232ad5797eee68feae3f7';
+
+L.tileLayer(`https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?api_key=${CARTO_API_KEY}`, {
+  attribution: '&copy; OpenStreetMap &copy; CARTO',
+  maxZoom: 19
 }).addTo(map);
 
 const vehicleMarkers = {};
