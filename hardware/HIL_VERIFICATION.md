@@ -152,6 +152,14 @@ net lists before and after are identical). Accepted on purpose, listed in `KNOWN
 Also found while checking the supplied datasheet: nothing in it contradicts the pin wiring, but it cannot confirm the
 capacitor values.
 
+## 6d. Test bench GUI
+
+`python hardware/gui/app.py` (or `scripts/start_gui.ps1`) opens a browser GUI: run each suite or all of them with live
+output and per-check results, try push-to-talk with the microphone, send voice to listeners at different distances, view
+the simulated OLED, serial log, wiring and schematic, and keep HTML/JSON reports in `hardware/reports/`. The Wokwi suites
+need `WOKWI_CLI_TOKEN` (environment or typed into the page; never stored). The browser microphone path is the one part
+not exercised here; the test-speech button and the radio-range table are.
+
 ## 7. Reproduce
 
 ```bash

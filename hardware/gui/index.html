@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RakshaWave Test Bench</title>
+<style>
+:root{--bg:#f5f7fa;--panel:#fff;--ink:#17202b;--mute:#667487;--line:#dfe5ec;--accent:#0b6e8a;--pass:#0a7a3d;--fail:#c0262d;--warn:#a86a00;--info:#5a6b7d;--code:#10151c;--codeink:#cfe3f1}
+@media (prefers-color-scheme:dark){:root{--bg:#10151b;--panel:#171e26;--ink:#e6edf4;--mute:#8b9aab;--line:#273341;--accent:#3cb4d6;--pass:#3ccf7e;--fail:#ff6b72;--warn:#e5a63c;--info:#8fa0b3;--code:#0b0f14;--codeink:#c5dbe9}}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.45 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--ink)}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:12px 20px;background:var(--panel);border-bottom:1px solid var(--line)}
+h1{font-size:18px;margin:0 8px 0 0}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-left:auto}
+.chip{font-size:12px;padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--mute)}
+.chip.ok{color:var(--pass);border-color:var(--pass)}.chip.no{color:var(--fail);border-color:var(--fail)}
+nav{display:flex;gap:2px;padding:0 20px;background:var(--panel);border-bottom:1px solid var(--line);overflow-x:auto}
+nav button{background:none;border:0;border-bottom:3px solid transparent;padding:10px 14px;font:inherit;color:var(--mute);cursor:pointer}
+nav button.on{color:var(--ink);border-color:var(--accent);font-weight:600}
+main{padding:20px;max-width:1180px;margin:0 auto}
+.tab{display:none}.tab.on{display:block}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+.card h2,.card h3{margin:0 0 8px;font-size:15px}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+button.btn{background:var(--accent);color:#fff;border:0;border-radius:7px;padding:7px 14px;font:inherit;font-weight:600;cursor:pointer}
+button.btn.ghost{background:none;color:var(--accent);border:1px solid var(--accent)}
+button.btn:disabled{opacity:.45;cursor:not-allowed}
+input[type=text],input[type=password],input[type=number]{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+.suite{display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.suite:first-of-type{border-top:0}
+.suite small{color:var(--mute);display:block}
+.badge{font-size:12px;font-weight:700;padding:2px 9px;border-radius:99px;border:1px solid currentColor;text-transform:uppercase;min-width:74px;text-align:center}
+.badge.queued{color:var(--mute)}.badge.running{color:var(--accent)}.badge.pass{color:var(--pass)}.badge.fail{color:var(--fail)}.badge.skipped{color:var(--warn)}
+.badge.running::after{content:"";display:inline-block;width:8px;height:8px;margin-left:6px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+pre.log{background:var(--code);color:var(--codeink);padding:10px;border-radius:8px;height:260px;overflow:auto;font:12px/1.4 ui-monospace,Consolas,monospace;margin:0;white-space:pre-wrap;word-break:break-all}
+table{border-collapse:collapse;width:100%}
+td,th{text-align:left;padding:4px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--mute);font-weight:600;font-size:12px}
+.s-pass{color:var(--pass);font-weight:700}.s-fail{color:var(--fail);font-weight:700}.s-warn{color:var(--warn);font-weight:700}.s-info{color:var(--info);font-weight:700}
+.kpis{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0}
+.kpi{border:1px solid var(--line);border-radius:8px;padding:8px 12px;min-width:120px}
+.kpi b{display:block;font-size:20px}.kpi span{color:var(--mute);font-size:12px}
+#pttBtn{width:170px;height:170px;border-radius:50%;border:0;background:var(--accent);color:#fff;font:700 18px system-ui;cursor:pointer;box-shadow:0 4px 14px #0003;user-select:none;touch-action:none}
+#pttBtn.live{background:var(--fail);transform:scale(.97)}
+canvas{width:100%;height:80px;background:var(--code);border-radius:6px;display:block}
+img.oled{width:384px;max-width:100%;image-rendering:pixelated;border:1px solid var(--line);border-radius:4px;background:#000}
+.muted{color:var(--mute)}.small{font-size:12px}
+ol li{margin:4px 0}
+code{background:var(--bg);padding:1px 5px;border-radius:4px;font-size:12px}
+details summary{cursor:pointer;color:var(--accent);margin:6px 0}
+</style>
+</head>
+<body>
+<header>
+  <h1>RakshaWave Test Bench</h1>
+  <span class="muted small" id="root"></span>
+  <div class="chips" id="chips"></div>
+</header>
+<nav id="nav">
+  <button data-tab="tests" class="on">Tests</button>
+  <button data-tab="ptt">Push-to-talk lab</button>
+  <button data-tab="sim">Simulator</button>
+  <button data-tab="sch">Schematic</button>
+  <button data-tab="rep">Reports</button>
+</nav>
+<main>
+
+<!-- ============================ TESTS ============================ -->
+<section class="tab on" id="tab-tests">
+  <div class="card">
+    <div class="row">
+      <button class="btn" id="runAll">Run all</button>
+      <button class="btn ghost" id="runSel">Run selected</button>
+      <label class="small muted">Wokwi token <input type="password" id="token" placeholder="from WOKWI_CLI_TOKEN" size="26" autocomplete="off"></label>
+      <span class="muted small" id="busy"></span>
+      <a id="reportLink" href="#" target="_blank" style="display:none;margin-left:auto">Open report</a>
+    </div>
+    <p class="small muted" style="margin:8px 0 0">The token is sent to the local server for this run only and is not saved. Wokwi suites are skipped without one.</p>
+  </div>
+  <div class="card" id="suiteList"></div>
+  <div class="card"><h3>Live output</h3><pre class="log" id="log">Nothing run yet.</pre></div>
+  <div id="results"></div>
+</section>
+
+<!-- ============================ PTT ============================ -->
+<section class="tab" id="tab-ptt">
+  <div class="card">
+    <h2>Push to talk (your microphone through the real radio path)</h2>
+    <p class="muted small" style="margin-top:0">Hold the button and speak. Your audio goes through Codec2 700C, 0.8 s LoRa frames, a lossy link, then the receiver (re-order, gaps become silence), and plays back.</p>
+    <div class="row" style="align-items:flex-start;gap:24px">
+      <div style="text-align:center">
+        <button id="pttBtn">HOLD TO TALK</button>
+        <div class="small muted" id="pttMsg" style="margin-top:6px">Microphone idle</div>
+      </div>
+      <div style="flex:1;min-width:260px">
+        <label>Packet loss <b id="lossVal">0</b>%<br><input type="range" id="loss" min="0" max="80" value="0" style="width:100%"></label>
+        <div class="row" style="margin-top:10px">
+          <button class="btn ghost" id="pttTest">Send 4 s test speech instead</button>
+          <label class="small muted">seed <input type="number" id="seed" value="1" style="width:70px"></label>
+        </div>
+        <div style="margin-top:12px" id="audioBox" hidden>
+          <div class="small muted">Sent (8 kHz, before the radio)</div><audio id="aIn" controls style="width:100%"></audio>
+          <div class="small muted" style="margin-top:6px">Received over LoRa</div><audio id="aOut" controls style="width:100%"></audio>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card" id="pttResult" hidden>
+    <h3>Result</h3>
+    <div class="kpis" id="pttKpis"></div>
+    <div class="small muted">Sent</div><canvas id="cvIn" width="1100" height="80"></canvas>
+    <div class="small muted" style="margin-top:6px">Received</div><canvas id="cvOut" width="1100" height="80"></canvas>
+    <table style="margin-top:10px"><thead><tr><th>Chunk</th><th>Bytes on air</th><th>Speech</th><th>Airtime</th><th>Delivered</th></tr></thead><tbody id="pktRows"></tbody></table>
+  </div>
+  <div class="card">
+    <h2>Radio range (vehicles at different distances)</h2>
+    <div class="row">
+      <label class="small muted">Listener distances in metres <input type="text" id="dists" value="100, 800, 1400, 2500" size="26"></label>
+      <label class="small muted">Talk seconds <input type="number" id="radioSec" value="3" min="1" max="30" style="width:70px"></label>
+      <button class="btn" id="radioGo">Talk</button>
+    </div>
+    <table style="margin-top:10px" id="radioTbl" hidden><thead><tr><th>Listener</th><th>Distance</th><th>Loss chance</th><th>Chunks heard</th><th>Concealed</th><th>Played</th><th>Result</th></tr></thead><tbody></tbody></table>
+    <p class="small muted" id="radioNote"></p>
+  </div>
+</section>
+
+<!-- ============================ SIM ============================ -->
+<section class="tab" id="tab-sim">
+  <div class="card">
+    <h2>Live simulator in CLion (Wokwi plugin)</h2>
+    <ol>
+      <li>Install the <b>Wokwi</b> plugin in CLion and activate it (<i>Wokwi: Request a new license</i>, free; this is separate from the CI token above).</li>
+      <li>Open this folder as the project. Build the firmware once: Terminal, <code>pio run</code> (or the Tests tab, "Build firmware").</li>
+      <li>Open <code>diagram.json</code> to see the board, or choose <b>Start Simulator</b> from the plugin menu / Wokwi tool window. It reads <code>wokwi.toml</code>, which points at <code>.pio/build/esp32-c3-devkitm-1/firmware.elf</code> and the two custom chips in <code>chips/</code>.</li>
+      <li>In the simulator, set the MPU6050 <b>accelZ</b> slider to 3.0 or more for a second: the OLED shows <i>ALERT SENT</i>, the LED lights and the buzzer sounds. The packet appears in the serial monitor.</li>
+      <li>To try the voice modem, paste the line from <a href="/files/hardware/ptt_sample_line.txt" target="_blank">ptt_sample_line.txt</a> into the serial monitor input: the OLED shows <i>VOICE TX</i> and the buzzer stays silent.</li>
+    </ol>
+    <p class="small muted">I could not run the CLion plugin myself; the steps follow Wokwi's documented project layout. If the plugin does not pick the project up, the same files work in the Wokwi VS Code extension.</p>
+  </div>
+  <div class="card">
+    <div class="row"><h3 style="margin:0">Simulated OLED from the last runs</h3><button class="btn ghost" id="refreshSim" style="margin-left:auto">Refresh</button></div>
+    <div class="row" style="margin-top:10px;align-items:flex-start">
+      <figure style="margin:0"><img class="oled" id="img1" src="/files/hardware/oled_alert.png"><figcaption class="small muted">Hazard alert</figcaption></figure>
+      <figure style="margin:0"><img class="oled" id="img2" src="/files/hardware/oled_voice.png"><figcaption class="small muted">Voice transmission</figcaption></figure>
+    </div>
+  </div>
+  <div class="card"><h3>Serial output of the last hazard run</h3><pre class="log" id="serial" style="height:170px">loading…</pre></div>
+  <div class="card"><h3>Parts and wiring (diagram.json)</h3><div id="wiring">loading…</div></div>
+</section>
+
+<!-- ============================ SCHEMATIC ============================ -->
+<section class="tab" id="tab-sch">
+  <div class="card">
+    <div class="row"><h3 style="margin:0">Schematic (rendered by kicad-cli)</h3>
+      <button class="btn ghost" id="regenSch" style="margin-left:auto">Regenerate PDF</button></div>
+    <object id="schPdf" data="/files/hardware/schematic.pdf" type="application/pdf" style="width:100%;height:760px;margin-top:10px">
+      <p>Your browser cannot show the PDF inline. <a href="/files/hardware/schematic.pdf" target="_blank">Open it</a>.</p></object>
+  </div>
+</section>
+
+<!-- ============================ REPORTS ============================ -->
+<section class="tab" id="tab-rep">
+  <div class="card">
+    <div class="row"><h3 style="margin:0">Saved reports</h3><button class="btn ghost" id="refreshRep" style="margin-left:auto">Refresh</button></div>
+    <p class="small muted">Every run saves a self-contained HTML report and a JSON file under <code>hardware/reports/</code>.</p>
+    <table><thead><tr><th>Run</th><th>Started</th><th>Took</th><th>Passed</th><th>Failed</th><th>Skipped</th><th></th></tr></thead><tbody id="repRows"></tbody></table>
+  </div>
+</section>
+
+</main>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const api = (p, body) => fetch(p, body === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)}).then(r => r.json());
+
+/* ---------- tabs ---------- */
+$('#nav').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x.id === 'tab-' + b.dataset.tab));
+  if (b.dataset.tab === 'rep') loadReports();
+  if (b.dataset.tab === 'sim') loadSim();
+});
+
+/* ---------- status + suites ---------- */
+let suites = [], status = {};
+async function loadStatus() {
+  status = await api('/api/status');
+  $('#root').textContent = status.root;
+  const names = {python:'Python', pio:'PlatformIO', 'wokwi-cli':'wokwi-cli', ngspice:'ngspice', 'kicad-cli':'kicad-cli 10'};
+  $('#chips').innerHTML = Object.entries(status.tools).map(([k,v]) => `<span class="chip ${v?'ok':'no'}">${names[k]||k} ${v?'found':'missing'}</span>`).join('') +
+     `<span class="chip ${status.token?'ok':''}">token ${status.token?'from environment':'not set'}</span>`;
+  suites = status.suites;
+  $('#suiteList').innerHTML = suites.map(s => `<div class="suite" id="su-${s.id}">
+      <input type="checkbox" class="sel" value="${s.id}" checked>
+      <div><b>${esc(s.title)}</b><small>${esc(s.desc)}</small></div>
+      <span class="badge queued" id="bd-${s.id}">idle</span>
+      <button class="btn ghost one" data-id="${s.id}">Run</button></div>`).join('');
+  document.querySelectorAll('.one').forEach(b => b.onclick = () => startRun([b.dataset.id]));
+}
+let timer = null, runId = null, since = 0;
+async function startRun(ids) {
+  const r = await api('/api/run', {suites: ids, token: $('#token').value});
+  if (r.error) { $('#busy').textContent = r.error; return; }
+  runId = r.id; since = 0; $('#log').textContent = ''; $('#results').innerHTML = ''; $('#reportLink').style.display = 'none';
+  ids.forEach(i => setBadge(i, 'queued'));
+  clearInterval(timer); timer = setInterval(poll, 600); poll();
+}
+function setBadge(id, st) { const b = $('#bd-' + id); if (b) { b.className = 'badge ' + st; b.textContent = st === 'queued' ? 'queued' : st; } }
+async function poll() {
+  const r = await api(`/api/run/${runId}?since=${since}`);
+  if (r.error) return;
+  since = r.next;
+  if (r.lines.length) { const l = $('#log'); const stick = l.scrollTop + l.clientHeight >= l.scrollHeight - 30; l.textContent += r.lines.join('\n') + '\n'; if (stick) l.scrollTop = l.scrollHeight; }
+  r.suites.forEach(s => { const b = $('#bd-' + s.id); if (b) { b.className = 'badge ' + s.status; b.textContent = s.status + (s.duration ? ` ${s.duration}s` : ''); } });
+  renderResults(r.suites);
+  $('#busy').textContent = r.state === 'running' ? 'running…' : '';
+  document.querySelectorAll('#runAll,#runSel,.one').forEach(b => b.disabled = r.state === 'running');
+  if (r.state === 'done') { clearInterval(timer); if (r.report) { const a = $('#reportLink'); a.href = r.report; a.style.display = ''; } }
+}
+function renderResults(list) {
+  $('#results').innerHTML = list.filter(s => s.checks && s.checks.length).map(s => {
+    const n = s.checks.length, bad = s.checks.filter(c => c.status === 'fail').length;
+    let extra = '';
+    if (s.extra && s.extra.corners) extra = `<table style="margin:6px 0"><tr><th>Battery</th><th>+3.3V min</th><th>after step</th><th>VINA min</th><th>BAT+ min</th></tr>` +
+       s.extra.corners.map(c => `<tr><td>${c.vbat} V</td><td>${(c.vout_min||0).toFixed(3)} V</td><td>${(c.vout_end||0).toFixed(3)} V</td><td>${(c.vina_min||0).toFixed(3)} V</td><td>${(c.vbat_min||0).toFixed(3)} V</td></tr>`).join('') + '</table>';
+    return `<div class="card"><details ${bad || s.status==='skipped' ? 'open' : ''}><summary><b>${esc(s.title)}</b> &nbsp;<span class="s-${s.status==='pass'?'pass':s.status==='fail'?'fail':'warn'}">${s.status.toUpperCase()}</span> <span class="muted small">${n} items${bad ? `, ${bad} failed` : ''}</span></summary>${extra}
+      <table>${s.checks.map(c => `<tr><td class="s-${c.status}" style="width:70px">${c.status.toUpperCase()}</td><td>${esc(c.name)}</td><td class="muted small">${esc(c.detail)}</td></tr>`).join('')}</table></details></div>`;
+  }).join('');
+}
+$('#runAll').onclick = () => startRun(suites.map(s => s.id));
+$('#runSel').onclick = () => startRun([...document.querySelectorAll('.sel:checked')].map(x => x.value));
+
+/* ---------- audio helpers ---------- */
+function b64ToI16(b) { const s = atob(b), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return new Int16Array(u.buffer); }
+function i16ToB64(a) { const u = new Uint8Array(a.buffer, a.byteOffset, a.byteLength); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }
+function wavUrl(pcm, rate) {
+  const buf = new ArrayBuffer(44 + pcm.length * 2), v = new DataView(buf), w = (o, t) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  w(0, 'RIFF'); v.setUint32(4, 36 + pcm.length * 2, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, pcm.length * 2, true);
+  new Int16Array(buf, 44).set(pcm); return URL.createObjectURL(new Blob([buf], {type: 'audio/wav'}));
+}
+function drawWave(cv, pcm) {
+  const g = cv.getContext('2d'), W = cv.width, H = cv.height; g.clearRect(0, 0, W, H); g.fillStyle = '#3cb4d6';
+  if (!pcm.length) return; const step = pcm.length / W;
+  for (let x = 0; x < W; x++) { let lo = 0, hi = 0; for (let i = Math.floor(x * step); i < Math.floor((x + 1) * step) && i < pcm.length; i++) { lo = Math.min(lo, pcm[i]); hi = Math.max(hi, pcm[i]); }
+    g.fillRect(x, H / 2 - hi / 32768 * H * 1.6, 1, Math.max(1, (hi - lo) / 32768 * H * 1.6)); }
+}
+function downsample(f32, from, to) {
+  const n = Math.floor(f32.length * to / from), out = new Int16Array(n), r = from / to;
+  for (let i = 0; i < n; i++) { let a = Math.floor(i * r), b = Math.max(a + 1, Math.floor((i + 1) * r)), s = 0; for (let k = a; k < b && k < f32.length; k++) s += f32[k]; out[i] = Math.max(-1, Math.min(1, s / (b - a))) * 32767; }
+  return out;
+}
+
+/* ---------- PTT lab ---------- */
+$('#loss').oninput = () => $('#lossVal').textContent = $('#loss').value;
+async function sendPcm(pcm) {
+  $('#pttMsg').textContent = 'Sending through the radio path…';
+  const r = await api('/api/ptt/loopback', {pcm: pcm ? i16ToB64(pcm) : null, loss: $('#loss').value / 100, seed: +$('#seed').value, seconds: 4});
+  if (r.error) { $('#pttMsg').textContent = r.error; return; }
+  const inP = b64ToI16(r.in_pcm), outP = b64ToI16(r.out_pcm);
+  $('#audioBox').hidden = false; $('#pttResult').hidden = false;
+  $('#aIn').src = wavUrl(inP, r.rate); $('#aOut').src = wavUrl(outP, r.rate); $('#aOut').play().catch(() => {});
+  drawWave($('#cvIn'), inP); drawWave($('#cvOut'), outP);
+  const k = (v, l) => `<div class="kpi"><b>${v}</b><span>${l}</span></div>`;
+  $('#pttKpis').innerHTML = k(r.talked_s + ' s', 'talked') + k(r.packets.length, 'LoRa frames') + k(r.airtime_s + ' s', 'airtime') + k(Math.round(r.duty * 100) + ' %', 'channel use while talking') +
+    k(r.lost, 'chunks concealed') + k(r.complete ? 'complete' : 'gaps', 'stream') + k(r.played_s + ' s', 'played back');
+  $('#pktRows').innerHTML = r.packets.map(p => `<tr><td>#${p.seq}${p.last ? ' (key up)' : ''}</td><td>${p.bytes}</td><td>${p.speech_ms} ms</td><td>${p.airtime_s} s</td><td class="${p.delivered ? 's-pass' : 's-fail'}">${p.delivered ? 'yes' : 'LOST'}</td></tr>`).join('');
+  $('#pttMsg').textContent = 'Done. Hold the button to talk again.';
+}
+$('#pttTest').onclick = () => sendPcm(null);
+let mic = null;
+async function micStart() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: false, noiseSuppression: false}});
+    const ctx = new AudioContext(), src = ctx.createMediaStreamSource(stream), proc = ctx.createScriptProcessor(4096, 1, 1), chunks = [];
+    proc.onaudioprocess = e => chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+    src.connect(proc); proc.connect(ctx.destination);
+    mic = {stream, ctx, proc, src, chunks}; $('#pttBtn').classList.add('live'); $('#pttBtn').textContent = 'TALKING…'; $('#pttMsg').textContent = 'Recording';
+  } catch (e) { $('#pttMsg').textContent = 'Microphone unavailable: ' + e.message; }
+}
+async function micStop() {
+  if (!mic) return; const m = mic; mic = null;
+  m.proc.disconnect(); m.src.disconnect(); m.stream.getTracks().forEach(t => t.stop());
+  const rate = m.ctx.sampleRate; m.ctx.close();
+  $('#pttBtn').classList.remove('live'); $('#pttBtn').textContent = 'HOLD TO TALK';
+  const n = m.chunks.reduce((a, c) => a + c.length, 0), all = new Float32Array(n); let o = 0; m.chunks.forEach(c => { all.set(c, o); o += c.length; });
+  if (n < rate * 0.2) { $('#pttMsg').textContent = 'Too short, hold the button while you speak'; return; }
+  sendPcm(downsample(all, rate, 8000));
+}
+const pb = $('#pttBtn');
+pb.addEventListener('pointerdown', e => { pb.setPointerCapture(e.pointerId); micStart(); });
+pb.addEventListener('pointerup', micStop); pb.addEventListener('pointercancel', micStop);
+document.addEventListener('keydown', e => { if (e.code === 'Space' && !e.repeat && document.getElementById('tab-ptt').classList.contains('on') && !/INPUT/.test(document.activeElement.tagName)) { e.preventDefault(); micStart(); } });
+document.addEventListener('keyup', e => { if (e.code === 'Space' && mic) micStop(); });
+
+$('#radioGo').onclick = async () => {
+  $('#radioNote').textContent = 'Talking…';
+  const r = await api('/api/ptt/radio', {distances: $('#dists').value.split(',').map(x => +x.trim()).filter(x => x > 0), seconds: +$('#radioSec').value});
+  if (r.error || r.ok === false) { $('#radioNote').textContent = r.error || 'failed'; return; }
+  const rows = Object.entries(r.listeners);
+  $('#radioTbl').hidden = false;
+  $('#radioTbl tbody').innerHTML = rows.map(([id, l]) => `<tr><td>${id}</td><td>${l.distance_m} m</td><td>${Math.round(l.loss * 100)} %</td><td>${l.received_chunks} / ${r.packets}</td><td>${l.lost_chunks}</td><td>${l.played_s} s</td>
+     <td class="${l.complete ? 's-pass' : l.audible ? 's-warn' : 's-fail'}">${l.complete ? 'heard it all' : l.audible ? 'heard with gaps' : 'heard nothing'}</td></tr>`).join('');
+  $('#radioNote').textContent = `${r.talked_s} s of speech became ${r.packets} frames of up to ${r.max_frame_bytes} bytes (${r.airtime_s} s of airtime). Range limit of the model: 1500 m.`;
+};
+
+/* ---------- simulator tab ---------- */
+async function loadSim() {
+  const t = Date.now();
+  $('#img1').src = '/files/hardware/oled_alert.png?' + t; $('#img2').src = '/files/hardware/oled_voice.png?' + t;
+  fetch('/files/hardware/wokwi_serial.log?' + t).then(r => r.ok ? r.text() : 'No serial log yet. Run "Wokwi: hazard alert" on the Tests tab.').then(x => { $('#serial').textContent = x; });
+  const d = await api('/api/diagram');
+  const parts = d.parts.map(p => `<tr><td><b>${esc(p.id)}</b></td><td>${esc(p.type)}</td></tr>`).join('');
+  const conns = d.connections.map(c => `<tr><td>${esc(c[0])}</td><td>${esc(c[1])}</td></tr>`).join('');
+  $('#wiring').innerHTML = `<div class="row" style="align-items:flex-start;gap:30px"><table style="width:auto"><tr><th>Part</th><th>Type</th></tr>${parts}</table><table style="width:auto"><tr><th>From</th><th>To</th></tr>${conns}</table></div>`;
+}
+$('#refreshSim').onclick = loadSim;
+
+/* ---------- schematic + reports ---------- */
+$('#regenSch').onclick = async () => { $('#regenSch').disabled = true; const r = await api('/api/schematic', {}); $('#regenSch').disabled = false; if (r.error) alert(r.error); else $('#schPdf').data = '/files/hardware/schematic.pdf?' + Date.now(); };
+async function loadReports() {
+  const r = await api('/api/reports');
+  $('#repRows').innerHTML = r.length ? r.map(x => `<tr><td>${x.id}</td><td>${x.started}</td><td>${x.duration} s</td><td class="s-pass">${x.passed}</td><td class="${x.failed ? 's-fail' : ''}">${x.failed}</td><td>${x.skipped}</td>
+     <td><a href="${x.url}" target="_blank">report</a> &middot; <a href="${x.json}" target="_blank">json</a></td></tr>`).join('') : '<tr><td colspan="7" class="muted">No reports yet. Run the tests first.</td></tr>';
+}
+$('#refreshRep').onclick = loadReports;
+loadStatus();
+</script>
+</body>
+</html>
