@@ -376,9 +376,14 @@ def get_mesh_state() -> dict:
         "tx_log": bench.mesh.tx_log,
         "clusters": [c.to_dict() for c in bench.verifier.clusters],
         "emergency_events": [e.to_dict() for e in bench.emergencies],
-        "emergency_broadcasts": [
-            p.to_dict() for p in bench.mesh.packet_log if PacketType(p.packet_type) == PacketType.EMERGENCY
-        ],
+        # one entry per logical EMERGENCY packet (relayed copies share its packet_id)
+        "emergency_broadcasts": list(
+            {
+                p.packet_id: p.to_dict()
+                for p in bench.mesh.packet_log
+                if PacketType(p.packet_type) == PacketType.EMERGENCY and p.hop_count == 0
+            }.values()
+        ),
         "generated_at": time.time(),
     }
 

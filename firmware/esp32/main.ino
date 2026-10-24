@@ -13,7 +13,7 @@
   Pin map (ESP32-C3-DevKitM-1, U4):
     I2C   SDA=IO5  SCL=IO6
     SPI   SCK=IO18 MISO=IO19 MOSI=IO7 NSS=IO4  RST=IO0 DIO0=IO8
-    GPS   RX=IO20  TX=IO21
+    GPS   RX=IO2   TX=IO1   (UART1; IO20/IO21 stay free for the USB-UART console)
     Buzzer=IO9 (active low)   LED=IO10 (active low)
 
   USB serial protocol (matches software/wimesh/protocol.py + LoRaNode):
@@ -47,8 +47,8 @@
 #define LORA_SS_PIN     4
 #define LORA_RST_PIN    0
 #define LORA_DIO0_PIN   8
-#define GPS_RX_PIN     20
-#define GPS_TX_PIN     21
+#define GPS_RX_PIN      2   // from GPS TX; idle-high also keeps the IO2 strap high
+#define GPS_TX_PIN      1
 #define BUZZER_PIN      9
 #define LED_PIN        10
 #define LORA_FREQ_HZ  433E6
@@ -255,18 +255,6 @@ void loop() {
 
   float magnitudeG, gyroDps;
   bool impact = readImpact(magnitudeG, gyroDps);
-#ifdef RW_DEBUG_IMU
-  static unsigned long lastImuLogMs = 0;
-  if (millis() - lastImuLogMs >= 1000) {
-    lastImuLogMs = millis();
-    Serial.print("IMU mag=");
-    Serial.print(magnitudeG, 3);
-    Serial.print(" g gyro=");
-    Serial.print(gyroDps, 1);
-    Serial.print(" dps impact=");
-    Serial.println(impact ? 1 : 0);
-  }
-#endif
 
   if (impact && gps.location.isValid() && (millis() - lastBroadcastMs) > BROADCAST_COOLDOWN_MS) {
     bool reliableFix = gps.hdop.isValid() ? (gps.hdop.hdop() <= GPS_MAX_HDOP) : false;

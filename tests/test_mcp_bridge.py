@@ -80,3 +80,21 @@ def test_mcp_server_registers_all_tools():
     tools = asyncio.run(bridge.build_server().list_tools())
     names = {t.name for t in tools}
     assert {"run_vision_detector", "fuse_and_ingest_esp32_serial", "simulate_corroborating_peer", "get_mesh_state"} <= names
+
+
+def test_corroborated_pothole_escalates_cluster_but_not_emergency():
+    bridge.run_vision_detector("pothole")
+    bridge.fuse_and_ingest_esp32_serial(ESP32_LINE, 0.88)
+    peer = bridge.simulate_corroborating_peer("VEH-002", "pothole", 18.5204, 73.8567, 12)
+
+    assert peer["clusters"][0]["escalated"] is True
+    assert peer["emergencies"] == []
+    assert bridge.get_mesh_state()["emergency_broadcasts"] == []
+
+
+def test_corroborated_debris_raises_emergency_broadcast():
+    bridge.simulate_corroborating_peer("VEH-001", "debris", 18.5204, 73.8567, 0)
+    peer = bridge.simulate_corroborating_peer("VEH-002", "debris", 18.5204, 73.8567, 12)
+
+    assert len(peer["emergencies"]) == 1
+    assert len(bridge.get_mesh_state()["emergency_broadcasts"]) == 1

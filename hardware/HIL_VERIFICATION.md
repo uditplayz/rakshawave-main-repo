@@ -8,11 +8,11 @@ below is claimed as verified unless the "Evidence" column says it ran.
 | Layer | Status | Evidence |
 |---|---|---|
 | KiCad nets (BAT+, +3.3V, U7 EN, LED resistor) | Fixed, verified by netlist extraction | `python hardware/sim/netlist_check.py "v2v 1.2  .kicad_sch"` |
-| Firmware pin map / serial protocol / TTL | Compiles for ESP32-C3 (both envs) and runs in Wokwi | `pio run -e wokwi`, Wokwi scenario |
+| Firmware pin map / serial protocol / TTL | Compiles for ESP32-C3 and runs in Wokwi on the real-board pin map (UART0 console) | `pio run`, Wokwi scenario |
 | Wokwi twin (ESP32-C3, MPU6050, SSD1306, SX1278 + GPS custom chips, buzzer, LED) | **Boots and passes** `tests/wokwi/hil.test.yaml` | `hardware/run_hil.py`, `hardware/oled_alert.png` |
 | Power rail transient | Simulated in ngspice 47 | `hardware/sim/power_rail.cir`, `power_rail_results.txt` |
-| Python stack as MCP server | Built, 22 tests pass | `software/mcp_bridge.py`, `tests/test_mcp_bridge.py` |
-| Full HIL chain (Wokwi -> bridge -> mesh) | 12/12 checks pass | `python hardware/run_hil.py` |
+| Python stack as MCP server | Built, 25 tests pass | `software/mcp_bridge.py`, `tests/test_mcp_bridge.py` |
+| Full HIL chain (Wokwi -> bridge -> mesh) | 13/13 checks pass | `python hardware/run_hil.py` |
 | `ltspice-mcp` server | **Not installed** | unverified package; ngspice driven directly |
 
 ## 1. Schematic (`v2v 1.2  .kicad_sch`)
@@ -27,7 +27,18 @@ After (checked with the extractor):
 - `BAT+`: J1.1, C4, R4, U7.VIN, **U7.EN**
 - `D1.A` -> `R5` (330 R, new) -> `+3.3V`; `D1.K` -> U4.IO10; `BZ1.-` -> U4.IO9
 
-Not changed, but found while doing this (see "Open hardware issues").
+Second pass (pin clash and MPU6050), also checked by net extraction:
+
+- GPS moved off IO20/IO21 to IO2 (RX, from GPS TX) / IO1 (TX); IO20/IO21 now
+  carry only the USB-UART console and are marked no-connect. IO2 is a strapping
+  pin: the GPS TX line idles high, which keeps it high at reset.
+- U3 `AD0`, `FSYNC`, `CLKIN` -> GND (address 0x68, unused inputs).
+- U3 `REGOUT` -> C9 0.1 uF, `CPOUT` -> C10 2.2 nF (net labels `MPU_REGOUT`,
+  `MPU_CPOUT`); C7/C8 0.1 uF on U3 `VDD`/`VLOGIC`; C11 0.1 uF on U1 (Ra-01) `VDD`.
+  The caps sit in a block at the left edge of the sheet; **place them at the
+  pins when the PCB is laid out.** The values are the usual MPU-6050 typical-circuit
+  values from memory: the datasheet could not be fetched here, so check section 7.2/7.3
+  of the InvenSense PS-MPU-6000A before fabrication.
 
 ## 2. Pin map as implemented
 
@@ -35,7 +46,8 @@ Not changed, but found while doing this (see "Open hardware issues").
 |---|---|
 | I2C (MPU6050 0x68, SSD1306 0x3C) | SDA IO5, SCL IO6 |
 | SPI (SX1278) | SCK IO18, MISO IO19, MOSI IO7, NSS IO4, RST IO0, DIO0 IO8 |
-| GPS UART, 9600 | RX IO20, TX IO21 |
+| GPS UART1, 9600 | RX IO2 (from GPS TX), TX IO1 |
+| Console / Pi link (USB-UART bridge) | UART0 on IO20/IO21, no longer shared with the GPS |
 | Buzzer / LED (active low) | IO9 / IO10 |
 
 Serial protocol: bare JSON lines out (no `RX: ` prefix); JSON lines in are
@@ -77,20 +89,15 @@ Run with a real ESP32-format packet and a synthetic 640x480 pothole frame:
 - Dedup: over an 8-relay chain 1 km apart (range 1.5 km) the packet reaches
   hop 5 and stops; exactly one transmission per hop, no storm
 
-## 5. Open hardware issues (not fixed here)
+## 5. Remaining hardware notes
 
-1. **IO18/IO19 are the ESP32-C3's native USB D-/D+ pins.** Using them as SPI
-   SCK/MISO disables USB-Serial-JTAG. The serial link to the Pi then has to be
-   UART0 on **IO20/IO21, which is also the GPS UART**. Both cannot work on the
-   physical board. Wokwi can hide this because it taps the UART separately.
-   Fix: move the GPS to free pins (e.g. IO1/IO2/IO3) or move SPI.
-2. **MPU6050 U3**: AD0 (pin 9) is floating, so the I2C address is not
-   guaranteed to be 0x68; tie it to GND. REGOUT (10) and CPOUT (20) have no
-   capacitors (datasheet calls for 0.1 uF and 2.2 nF; verify). FSYNC (11)
-   is floating; it should be grounded.
-3. **IO9 / IO8 are strapping pins** (buzzer and LoRa DIO0). The active-low
-   buzzer is high at reset so this should boot, but verify.
-4. The ESP32 `5V` pin (U4.13) and RST are unconnected; the HAT only brings 5 V
+1. **IO18/IO19** are the C3's native USB D-/D+ pins and are used for SPI, so
+   native USB-JTAG is unavailable; flashing and the Pi link use the USB-UART
+   bridge on IO20/IO21 (the DevKitM-1's CP2102N). Check this against the
+   DevKitM-1 schematic before relying on it.
+2. **IO9 / IO8 / IO2 are strapping pins** (buzzer, LoRa DIO0, GPS TX line). The
+   active-low buzzer and the idle-high GPS line should boot normally, but verify.
+3. The ESP32 `5V` pin (U4.13) and RST are unconnected; the HAT only brings 5 V
    and GND from the Pi header.
 
 ## 6. Findings in the request itself
@@ -98,11 +105,12 @@ Run with a real ESP32-format packet and a synthetic 640x480 pothole frame:
 - "2.4 g Z spike ... `|mag - 1.0| >= 1.8 g`" is inconsistent: 2.4 g gives 1.4 g
   of delta and will not trigger the firmware. The Wokwi scenario uses 3.0 g.
   The MPU is set to +/-4 g, so spikes above 4 g clip.
-- `EmergencyResponder` raised an EMERGENCY for a corroborated **pothole**.
-  The bridge copies `simulate_fleet.py`'s rule (`confidence >= 0.8` counts as
-  impact), and the fused confidence is 0.946. If potholes should not call
-  emergency services, that rule needs changing; it is the repo's existing
-  behaviour, not a bridge quirk.
+- `EmergencyResponder` used to raise an EMERGENCY for a corroborated pothole
+  (the simulator's "confidence >= 0.8 means impact" hint). Every pothole hit
+  produces an IMU impact, so that signal cannot tell a collision from road
+  damage. **Changed:** pothole and crack clusters still escalate to a trusted
+  hazard but never raise an EMERGENCY; debris / unknown hazards still do.
+  Tests cover both, and `run_hil.py` runs a debris control case.
 - `uv tool install ltspice-mcp` / `Cognitohazard/ltspice-mcp` could not be
   verified as a real, trustworthy package, so it was not installed.
 - The Wokwi CLI was installed by you (`~/.wokwi/bin`); the `curl | sh` installer
@@ -111,17 +119,20 @@ Run with a real ESP32-format packet and a synthetic 640x480 pothole frame:
 
 ## 6b. Wokwi twin notes
 
-- The `wokwi` PlatformIO env sends `Serial` over USB-Serial/JTAG
-  (`serialInterface` on the board) so the GPS can sit on IO20/IO21 in the sim.
-  This hides issue 1 in section 5; it is not a fix for the real board.
+- The twin runs the real-board build: `Serial` is UART0 through
+  `$serialMonitor`, GPS on IO1/IO2. The earlier USB-Serial/JTAG workaround and
+  the `wokwi` PlatformIO env are gone.
 - The SX1278 chip only models TX (FIFO + TX_DONE). It prints each frame as
   `[chip-sx1278] [sx1278] TX #n ...` in the CLI output; that line is not part of
   the serial stream, so scenarios wait on the ESP32's own JSON line instead.
 - `uart_write()` drops data while a previous write is in flight, so the GPS
   chip sends GGA + RMC as one buffer (otherwise speed stayed 0).
+- The CLI's serial log can lose the CR/LF the firmware prints, so
+  `run_hil.py` extracts the packet with a regex.
 - The alert's `hz` is `unknown_hazard` (IMU only); the pothole type comes from
   the Pi's vision stage during fusion.
-- `RW_DEBUG_IMU` (wokwi env only) prints `IMU mag=... gyro=...` once a second.
+- Not done (optional): LoRa receive in the SX1278 chip / two-board link, and a
+  switching-level TPS63001 model for ripple.
 
 ## 7. Reproduce
 
@@ -130,7 +141,7 @@ python -m pytest -q
 python hardware/sim/netlist_check.py "v2v 1.2  .kicad_sch" --net +3.3V BAT+
 ngspice -b hardware/sim/power_rail.cir
 
-pio run -e wokwi                      # builds .pio/build/wokwi/firmware.{bin,elf}
+pio run                               # builds .pio/build/esp32-c3-devkitm-1/firmware.{bin,elf}
 export WOKWI_CLI_TOKEN=...            # from wokwi.com/dashboard/ci
 python hardware/run_hil.py            # boots Wokwi, then drives the Python stack
 # chips are prebuilt; to rebuild:

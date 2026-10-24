@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -42,11 +43,11 @@ def find_wokwi() -> str | None:
     )
 
 
-def run_wokwi() -> list[str]:
+def run_wokwi() -> str:
     exe = find_wokwi()
     if not exe or not os.environ.get("WOKWI_CLI_TOKEN"):
         print("wokwi-cli or WOKWI_CLI_TOKEN missing; using the last captured serial log")
-        return SERIAL_LOG.read_text().splitlines() if SERIAL_LOG.exists() else []
+        return SERIAL_LOG.read_text() if SERIAL_LOG.exists() else ""
     proc = subprocess.run(
         [exe, "--timeout", "40000", "--scenario", "tests/wokwi/hil.test.yaml",
          "--serial-log-file", str(SERIAL_LOG), "."],
@@ -54,16 +55,17 @@ def run_wokwi() -> list[str]:
     )
     check("Wokwi scenario (boot, spike, buzzer/LED pins, OLED)", proc.returncode == 0,
           "scenario completed" if proc.returncode == 0 else (proc.stdout + proc.stderr)[-400:])
-    return SERIAL_LOG.read_text().splitlines()
+    return SERIAL_LOG.read_text()
 
 
 def main() -> int:
-    lines = run_wokwi()
+    # The CLI's serial log can drop the CR/LF the firmware prints, so match on the whole text.
+    text = run_wokwi()
     for needle, label in [("OLED ok", "OLED init (SSD1306 @0x3C)"), ("MPU6050 ok", "MPU6050 init (@0x68)"),
                           ("LoRa ok", "LoRa.begin(433E6) via SX1278 chip")]:
-        check(label, any(needle in l for l in lines))
+        check(label, needle in text)
 
-    packets = [l for l in lines if l.startswith("{") and '"t":"HAZARD_ALERT"' in l and l.endswith("}")]
+    packets = re.findall(r'\{"id":[^{}]*"t":"HAZARD_ALERT"[^{}]*\}', text)
     check("ESP32 emitted a bare JSON HAZARD_ALERT line", bool(packets), f"{len(packets)} packet(s)")
     if not packets:
         return 1
@@ -91,8 +93,16 @@ def main() -> int:
     check("Dedup: no broadcast storm, hops <= 5",
           all(p["storm_free"] for p in state["packets"].values()) and state["max_hop_observed"] <= 5,
           f"{state['total_transmissions']} tx, {state['total_airtime_s']} s airtime, max hop {state['max_hop_observed']}")
-    check("EmergencyResponder evaluated the cluster", len(state["emergency_events"]) <= 1,
-          f"{len(state['emergency_events'])} EMERGENCY (repo rule: confidence >= 0.8 counts as impact)")
+    check("Corroborated pothole is a trusted cluster but NOT an EMERGENCY (routine road damage)",
+          len(state["emergency_events"]) == 0 and not state["emergency_broadcasts"],
+          f"{len(state['emergency_events'])} EMERGENCY")
+
+    # Control case: two vehicles reporting debris (collision-type hazard) must escalate.
+    bridge.reset_bench()
+    bridge.simulate_corroborating_peer("VEH-001", "debris", pkt["lat"], pkt["lon"], 0)
+    ctl = bridge.simulate_corroborating_peer("VEH-002", "debris", pkt["lat"], pkt["lon"], 12)
+    check("Control: corroborated debris raises an EMERGENCY broadcast",
+          len(ctl["emergencies"]) == 1 and len(bridge.get_mesh_state()["emergency_broadcasts"]) == 1)
 
     failed = [c for c in checks if not c[1]]
     print(f"\n{len(checks) - len(failed)}/{len(checks)} checks passed")
