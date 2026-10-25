@@ -11,3 +11,5 @@ node_modules/
 CLAUDE.md
 .pio/
 .idea/
+
+hardware/reports/

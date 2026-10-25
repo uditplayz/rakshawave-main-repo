@@ -128,6 +128,7 @@ class _Stream:
     lost_chunks: int = 0
     received_chunks: int = 0
     done: bool = False
+    timed_out: bool = False  # ended because the key-up chunk never arrived
 
 
 class PttReceiver:
@@ -179,6 +180,7 @@ class PttReceiver:
                     self._conceal(sid)
             elif now - st.updated >= self.idle_timeout_s:
                 st.done = True  # the last chunk (key-up) was lost: end the stream
+                st.timed_out = True
 
     # -- internals ---------------------------------------------------------------
     def _drain(self, sid: str) -> None:
@@ -215,7 +217,7 @@ class PttReceiver:
                 "received_chunks": st.received_chunks,
                 "lost_chunks": st.lost_chunks,
                 "played_s": round(st.played_samples / SAMPLE_RATE, 2),
-                "complete": st.done and st.lost_chunks == 0,
+                "complete": st.done and st.lost_chunks == 0 and not st.timed_out,
                 "ended": st.done,
             }
             for sid, st in self.streams.items()

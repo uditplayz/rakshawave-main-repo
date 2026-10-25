@@ -128,6 +128,7 @@ def test_stream_ends_when_the_final_chunk_is_lost():
 
     clock.t = 5.0
     assert rx.receiving() is False  # channel is free again
+    assert rx.stats()[0]['complete'] is False  # the tail was cut off, so it is not a complete transmission
 
 
 def test_talk_time_limit_stops_the_stream():
