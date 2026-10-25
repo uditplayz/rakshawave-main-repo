@@ -56,7 +56,17 @@ Our custom PCB (designed in KiCad, files in the repo root) is a **Raspberry Pi 5
 
 **Unit cost (parts list):** ~₹15,000
 
-The ESP32 firmware (`firmware/esp32/main.ino`) sends the **same JSON packet format** as `software/wimesh/protocol.py`, so the Python stack can decode packets from real hardware with no translation layer.
+The ESP32 firmware (`firmware/esp32/main.ino`) sends the **same JSON packet format** as `software/wimesh/protocol.py`, so the Python stack can decode packets from real hardware with no translation layer. On its own (no Pi attached) it also relays hazard packets: the boards form a LoRa mesh by themselves.
+
+### Hardware lab (the firmware on emulated boards, in the browser)
+
+`hardware/lab/` runs several boards side by side in one page. Each runs the real firmware compiled to WebAssembly; the SX1278, MPU-6050, OLED and GPS are emulated at register level, the cars and road are a physical ride model, and the boards reach each other only through a modelled 433 MHz channel (two-ray ground reflection, fading, noise, collisions). Crash a car and watch the alert go out, get relayed and reach a car 4.4 km away.
+
+```bash
+python hardware/gui/app.py        # then open http://127.0.0.1:8765/lab/
+```
+
+Details, measurements and the issues the lab found in the firmware: [`hardware/LAB.md`](hardware/LAB.md). It is an emulation, not a field test.
 
 ---
 
@@ -188,6 +198,7 @@ Settings > Demo shows the live device count. `Simulator/index.html` is the offli
 ├── Simulator/index.html       # offline two-phone simulator (scripted scenarios, no server)
 ├── render.yaml                # one-click hosting blueprint (Render)
 ├── firmware/esp32/main.ino    # ESP32-C3 + MPU6050 + GPS + LoRa firmware
+├── hardware/lab/              # hardware lab: firmware.wasm + emulated boards + 3D UI (see hardware/LAB.md)
 ├── tests/                     # pytest unit tests
 ├── v2v 1.2.kicad_*            # KiCad schematic + PCB (Pi 5 HAT)
 ├── scripts/run_demo.{sh,ps1}  # one-command demo

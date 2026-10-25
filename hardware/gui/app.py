@@ -383,7 +383,9 @@ def ptt_radio(distances: list[float], seconds: float) -> dict:
 # ------------------------------------------------------------------ HTTP
 MIME = {".html": "text/html; charset=utf-8", ".json": "application/json", ".png": "image/png", ".pdf": "application/pdf",
         ".log": "text/plain; charset=utf-8", ".txt": "text/plain; charset=utf-8", ".yaml": "text/plain; charset=utf-8",
-        ".js": "text/javascript", ".css": "text/css", ".toml": "text/plain; charset=utf-8"}
+        ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".toml": "text/plain; charset=utf-8",
+        ".wasm": "application/wasm"}
+LAB = ROOT / "hardware" / "lab" / "web"
 FILES_OK = ("hardware/", "tests/wokwi/", "diagram.json", "wokwi.toml", "platformio.ini")
 
 
@@ -436,6 +438,16 @@ class Handler(BaseHTTPRequestHandler):
                                    report=run.report_url))
         if path == "/twin":
             return self._send(200, (HERE / "twin.html").read_bytes(), MIME[".html"])
+        if path == "/lab":
+            self.send_response(301)
+            self.send_header("Location", "/lab/")
+            self.end_headers()
+            return
+        if path.startswith("/lab/"):
+            p = (LAB / (path[len("/lab/"):] or "index.html")).resolve()
+            if LAB not in p.parents or not p.is_file():
+                return self._send(404, b"not found", "text/plain")
+            return self._send(200, p.read_bytes(), MIME.get(p.suffix.lower(), "application/octet-stream"))
         if path.startswith("/static/"):
             p = (HERE / path[len("/static/"):]).resolve()
             if HERE not in p.parents or not p.is_file():
