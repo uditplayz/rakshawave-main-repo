@@ -63,6 +63,7 @@ details summary{cursor:pointer;color:var(--accent);margin:6px 0}
   <button data-tab="sim">Simulator</button>
   <button data-tab="sch">Schematic</button>
   <button data-tab="rep">Reports</button>
+  <button onclick="location.href='/lab/'">Hardware Lab</button>
   <button onclick="location.href='/twin'">3D Twin</button>
 </nav>
 <main>
@@ -128,6 +129,10 @@ details summary{cursor:pointer;color:var(--accent);margin:6px 0}
 
 <!-- ============================ SIM ============================ -->
 <section class="tab" id="tab-sim">
+  <div class="card">
+    <h2>Hardware lab: several boards in a LoRa mesh (runs in this browser, no Wokwi)</h2>
+    <p>The real firmware on emulated boards with register-level chips, a physical 433 MHz channel and a vehicle model: crash a car and watch the alert travel and get relayed. <a href="/lab/"><b>Open the hardware lab</b></a> &middot; <a href="/files/hardware/LAB.md" target="_blank">how it works</a></p>
+  </div>
   <div class="card">
     <h2>3D twin (runs in this browser)</h2>
     <p>An interactive 3D model of the device driven by the <b>real firmware</b> in the Wokwi simulator: drive over a pothole, hold the push-to-talk button, add a second vehicle. <a href="/twin"><b>Open the 3D twin</b></a></p>

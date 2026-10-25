@@ -17,8 +17,16 @@
     Buzzer=IO9 (active low)   LED=IO10 (active low)
 
   USB serial protocol (matches software/wimesh/protocol.py + LoRaNode):
-    ESP32 -> Pi : one bare JSON packet per line (also for packets heard on LoRa)
+    ESP32 -> Pi : one bare JSON packet per line (also for packets heard on LoRa,
+                  each preceded by a non-JSON "RX rssi=.. snr=.." line)
     Pi -> ESP32 : one JSON packet per line; the ESP32 transmits it over LoRa
+
+  WiMesh relay: the ESP32 relays hazard packets on its own (hop count, TTL,
+  duplicate suppression, RSSI-weighted backoff), so a mesh works with or
+  without a Raspberry Pi attached. Voice is never relayed.
+
+  Radio: 433 MHz, SF7, BW 125 kHz, CR 4/5, 8-symbol preamble, CRC on,
+  sync word 0x12, +17 dBm on PA_BOOST.
 
   The "ttl" field is relative seconds-to-live (< 1e6); protocol.py converts
   it to an absolute expiry on decode.
@@ -52,13 +60,18 @@
 #define BUZZER_PIN      9
 #define LED_PIN        10
 #define LORA_FREQ_HZ  433E6
+#define LORA_SF           7
+#define LORA_BW_HZ    125E3
+#define LORA_CR_DEN       5
+#define LORA_PREAMBLE     8
+#define LORA_TX_DBM      17
 
 #define OLED_ADDR    0x3C
 #define OLED_WIDTH    128
 #define OLED_HEIGHT    32
 
 // ---- Thresholds (mirrors software/config.py) --------------------------------
-const char* VEHICLE_ID          = "VEH-ESP32-01";
+char VEHICLE_ID[12];                     // "RW-xxxxxx" from the factory MAC (unique per board)
 const float IMPACT_THRESHOLD_G  = 1.8;
 const float GYRO_THRESHOLD_DPS  = 150.0;
 const float GPS_MAX_HDOP        = 3.5;
@@ -84,29 +97,37 @@ String serialLine;
 const size_t SERIAL_LINE_MAX = 400;
 const size_t LORA_MAX_FRAME = 255;  // SX127x FIFO / LoRa payload limit
 
-void showText(const char* line1, const char* line2) {
+void showText(const char* line1, const char* line2, const char* line3) {
   if (!oledOk) return;
   oled.clearDisplay();
   oled.setTextColor(SSD1306_WHITE);
   oled.setTextSize(1);
   oled.setCursor(0, 0);
   oled.println(line1);
-  oled.setCursor(0, 16);
+  oled.setCursor(0, line3 ? 12 : 16);
   oled.println(line2);
+  if (line3) {
+    oled.setCursor(0, 24);
+    oled.println(line3);
+  }
   oled.display();
 }
 
-void alertOn(const char* title, const char* hazardType) {
+void showIdle() {
+  showText("RakshaWave", "monitoring", VEHICLE_ID);
+}
+
+void alertOn(const char* title, const char* hazardType, const char* detail) {
   digitalWrite(BUZZER_PIN, LOW);  // active low
   digitalWrite(LED_PIN, LOW);     // active low
   alertOffAtMs = millis() + ALERT_DURATION_MS;
-  showText(title, hazardType);
+  showText(title, hazardType, detail);
 }
 
 void alertOff() {
   digitalWrite(BUZZER_PIN, HIGH);
   digitalWrite(LED_PIN, HIGH);
-  showText("RakshaWave", "monitoring");
+  showIdle();
 }
 
 // Push-to-talk voice chunks are not hazards: no buzzer, no LED, just a note on
@@ -120,15 +141,20 @@ const unsigned long VOICE_NOTE_MS = 1200;
 
 void voiceNote(const char* title) {
   voiceNoteOffAtMs = millis() + VOICE_NOTE_MS;
-  if (alertOffAtMs == 0) showText(title, "push-to-talk");  // never cover a hazard alert
+  if (alertOffAtMs == 0) showText(title, "push-to-talk", nullptr);  // never cover a hazard alert
 }
 
 void setup() {
+  uint64_t mac = ESP.getEfuseMac();  // byte 0 is the first MAC octet
+  snprintf(VEHICLE_ID, sizeof(VEHICLE_ID), "RW-%02X%02X%02X",
+           (uint8_t)(mac >> 24), (uint8_t)(mac >> 32), (uint8_t)(mac >> 40));
+
   Serial.setRxBufferSize(1024);  // a blocking LoRa TX must not overflow the Pi's next line
   Serial.begin(115200);
 
   pinMode(BUZZER_PIN, OUTPUT);
   pinMode(LED_PIN, OUTPUT);
+  pinMode(LORA_DIO0_PIN, INPUT);  // RxDone from the SX1278
   digitalWrite(BUZZER_PIN, HIGH);
   digitalWrite(LED_PIN, HIGH);
 
@@ -136,7 +162,7 @@ void setup() {
 
   oledOk = oled.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR);
   Serial.println(oledOk ? "OLED ok" : "OLED not found - check wiring.");
-  showText("RakshaWave", "booting...");
+  showText("RakshaWave", "booting...", nullptr);
 
   mpuOk = mpu.begin(0x68, &Wire);
   if (!mpuOk) {
@@ -155,11 +181,21 @@ void setup() {
   if (!LoRa.begin(LORA_FREQ_HZ)) {
     Serial.println("LoRa init failed - check wiring.");
   } else {
+    LoRa.setSpreadingFactor(LORA_SF);
+    LoRa.setSignalBandwidth(LORA_BW_HZ);
+    LoRa.setCodingRate4(LORA_CR_DEN);
+    LoRa.setPreambleLength(LORA_PREAMBLE);
+    LoRa.setSyncWord(0x12);
+    LoRa.enableCrc();               // without it a corrupted frame is delivered as data
+    LoRa.setTxPower(LORA_TX_DBM);
+    LoRa.receive();                 // continuous RX: see pollLora()
     Serial.println("LoRa ok");
   }
 
   serialLine.reserve(SERIAL_LINE_MAX);
-  Serial.println("RakshaWave node online.");
+  randomSeed(LoRa.random() ^ (uint32_t)mac);
+  Serial.print("RakshaWave node online. id=");
+  Serial.println(VEHICLE_ID);
   alertOff();
 }
 
@@ -187,15 +223,115 @@ bool readImpact(float &magnitudeG, float &gyroDps) {
   return (deltaG >= IMPACT_THRESHOLD_G) || (gyroDps >= GYRO_THRESHOLD_DPS);
 }
 
+// Listen before talk: wait (up to ~0.5 s) while another frame is on the air.
+// Frames weaker than the threshold are under the noise and cannot be sensed.
+const int LBT_THRESHOLD_DBM = -105;
+
 void loraSend(const String &payload) {
+  for (int i = 0; i < 100 && LoRa.rssi() > LBT_THRESHOLD_DBM; i++) delay(5);
   LoRa.beginPacket();
   LoRa.print(payload);
-  LoRa.endPacket();
+  LoRa.endPacket();               // blocks for the time on air
+  LoRa.receive();                 // back to listening
+}
+
+// Semtech AN1200.13 time on air for the settings above (explicit header, CRC on).
+float loraAirtimeMs(size_t payloadBytes) {
+  const float tSym = (float)(1 << LORA_SF) / (LORA_BW_HZ / 1000.0);  // ms
+  const int de = tSym > 16.0 ? 1 : 0;                                 // low data rate optimise
+  float n = (8.0 * payloadBytes - 4.0 * LORA_SF + 28 + 16) / (4.0 * (LORA_SF - 2 * de));
+  int nPayload = 8 + max((int)ceil(n) * (LORA_CR_DEN), 0);
+  return (LORA_PREAMBLE + 4.25) * tSym + nPayload * tSym;
+}
+
+// ---- WiMesh relay -----------------------------------------------------------
+// Every node rebroadcasts a hazard packet once (hop + 1, TTL reduced by the
+// time it spent in the air and in this node). The wait is counted in slots of
+// one frame time: nodes that heard it weakly (far away) take the first slot,
+// strong (near) ones later slots, so a relay is usually on the air and heard by
+// the others before their own turn. Hearing one copy relayed cancels ours
+// (counter-based flooding suppression); listen-before-talk covers the rest.
+const uint8_t SEEN_IDS = 32;
+String seenIds[SEEN_IDS];
+uint8_t seenNext = 0;
+
+bool alreadySeen(const String &id) {
+  for (uint8_t i = 0; i < SEEN_IDS; i++) {
+    if (seenIds[i] == id) return true;
+  }
+  return false;
+}
+
+void rememberId(const String &id) {
+  seenIds[seenNext] = id;
+  seenNext = (seenNext + 1) % SEEN_IDS;
+}
+
+struct PendingRelay {
+  bool active;
+  String id;
+  String payload;
+  unsigned long heardAtMs;
+  unsigned long dueAtMs;
+  uint8_t duplicatesHeard;
+};
+PendingRelay relay = {false, "", "", 0, 0, 0};
+const uint8_t RELAY_SUPPRESS_AFTER = 1;
+
+void scheduleRelay(JsonDocument &doc, const String &id, int rssi, size_t frameBytes) {
+  int hop = doc["hop"] | 0;
+  int maxHops = doc["mh"] | (int)MAX_HOPS;
+  float ttl = doc["ttl"] | PACKET_TTL_S;
+  if (hop >= maxHops || relay.active) return;
+
+  // TTL is relative: subtract the frame's own air time now, the hold time at send.
+  ttl -= loraAirtimeMs(frameBytes) / 1000.0;
+  if (ttl <= 0) return;
+  doc["hop"] = hop + 1;
+  doc["ttl"] = ttl;
+
+  relay.active = true;
+  relay.id = id;
+  relay.payload = "";
+  serializeJson(doc, relay.payload);
+  relay.heardAtMs = millis();
+  unsigned long slotMs = (unsigned long)loraAirtimeMs(relay.payload.length()) + 40;
+  int slot = constrain((rssi + 125) / 12, 0, 4);
+  relay.dueAtMs = millis() + 10 + slot * slotMs + random(0, 60);
+  relay.duplicatesHeard = 0;
+}
+
+void serviceRelay() {
+  if (!relay.active || (long)(millis() - relay.dueAtMs) < 0) return;
+  if (relay.duplicatesHeard >= RELAY_SUPPRESS_AFTER) {
+    relay.active = false;
+    return;
+  }
+  if (LoRa.rssi() > LBT_THRESHOLD_DBM) {
+    // Channel busy: retry after a random backoff. The frame on the air may be
+    // another node's relay of this packet, which pollLora() will count first.
+    relay.dueAtMs = millis() + random(20, 120);
+    return;
+  }
+  relay.active = false;
+
+  StaticJsonDocument<384> doc;
+  if (deserializeJson(doc, relay.payload) != DeserializationError::Ok) return;
+  float ttl = doc["ttl"].as<float>() - (millis() - relay.heardAtMs) / 1000.0;
+  if (ttl <= 0) return;
+  doc["ttl"] = round(ttl * 10.0) / 10.0;
+  String out;
+  serializeJson(doc, out);
+  if (out.length() > LORA_MAX_FRAME) return;
+  loraSend(out);
+  Serial.print("RELAY hop=");
+  Serial.println(doc["hop"].as<int>());
 }
 
 void broadcastHazardAlert(float confidence, float lat, float lon, float speedKmh) {
   StaticJsonDocument<256> doc;
-  doc["id"]  = String(millis()) + "-" + VEHICLE_ID;
+  String id = String(millis()) + "-" + VEHICLE_ID;
+  doc["id"]  = id;
   doc["t"]   = "HAZARD_ALERT";
   doc["veh"] = VEHICLE_ID;
   doc["hz"]  = "unknown_hazard";      // camera stage runs on the companion board
@@ -212,9 +348,10 @@ void broadcastHazardAlert(float confidence, float lat, float lon, float speedKmh
   String payload;
   serializeJson(doc, payload);
 
+  rememberId(id);                     // our own packet coming back is not news
   loraSend(payload);
   Serial.println(payload);            // bare JSON line for LoRaNode.poll_serial()
-  alertOn("ALERT SENT", "unknown_hazard");
+  alertOn("ALERT SENT", "unknown_hazard", VEHICLE_ID);
 }
 
 // A full JSON line arrived from the Raspberry Pi: put it on the air.
@@ -236,7 +373,7 @@ void handleSerialLine(const String &line) {
     hz = doc["hz"] | "hazard";
   }
   loraSend(line);
-  alertOn("PI -> LORA", hz);
+  alertOn("PI -> LORA", hz, nullptr);
 }
 
 void pollUsbSerial() {
@@ -254,28 +391,56 @@ void pollUsbSerial() {
   }
 }
 
+// The radio stays in continuous RX and raises DIO0 (IO8) on RxDone. Polling
+// parsePacket() alone would use RX single mode, which times out every 100
+// symbols and is only re-armed on the next loop(): a frame starting in that
+// gap is lost.
 void pollLora() {
-  int packetSize = LoRa.parsePacket();
-  if (!packetSize) return;
-
+  if (digitalRead(LORA_DIO0_PIN) == LOW) return;
+  int packetSize = LoRa.parsePacket();   // also clears the IRQ flags
   String received;
-  while (LoRa.available()) {
+  while (packetSize && LoRa.available()) {
     received += (char)LoRa.read();
   }
-  Serial.println(received);  // bare JSON, no prefix (LoRaNode.poll_serial decodes it)
+  int rssi = LoRa.packetRssi();
+  float snr = LoRa.packetSnr();
+  LoRa.receive();                        // re-arm before the slow work below
+  if (!packetSize) return;               // CRC error: dropped by the library
 
   if (isVoiceLine(received)) {
+    Serial.println(received);
     voiceNote("VOICE RX");
     return;
   }
 
   StaticJsonDocument<384> doc;
-  const char* hz = "hazard";
-  if (deserializeJson(doc, received) == DeserializationError::Ok) {
-    hz = doc["hz"] | "hazard";
+  if (deserializeJson(doc, received) != DeserializationError::Ok) {
+    Serial.println("RX dropped: not a WiMesh packet");
+    return;
   }
-  alertOn("ALERT HEARD", hz);
-  // A full gateway node would relay per protocol.py's hop-count / TTL rules.
+  String id = doc["id"] | "";
+  const char* veh = doc["veh"] | "";
+  int hop = doc["hop"] | 0;
+
+  if (alreadySeen(id) || strcmp(veh, VEHICLE_ID) == 0) {
+    // Someone relayed a packet we already have: it counts against our own relay.
+    if (relay.active && relay.id == id) relay.duplicatesHeard++;
+    return;
+  }
+  rememberId(id);
+
+  Serial.print("RX rssi=");
+  Serial.print(rssi);
+  Serial.print(" snr=");
+  Serial.print(snr, 1);
+  Serial.print(" hop=");
+  Serial.println(hop);
+  Serial.println(received);  // bare JSON, no prefix (LoRaNode.poll_serial decodes it)
+
+  char detail[22];
+  snprintf(detail, sizeof(detail), "%ddBm hop%d %s", rssi, hop, veh);
+  alertOn("ALERT HEARD", doc["hz"] | "hazard", detail);
+  scheduleRelay(doc, id, rssi, received.length());
 }
 
 void loop() {
@@ -302,13 +467,14 @@ void loop() {
 
   pollUsbSerial();
   pollLora();
+  serviceRelay();
 
   if (alertOffAtMs != 0 && (long)(millis() - alertOffAtMs) >= 0) {
     alertOffAtMs = 0;
     alertOff();
   } else if (voiceNoteOffAtMs != 0 && alertOffAtMs == 0 && (long)(millis() - voiceNoteOffAtMs) >= 0) {
     voiceNoteOffAtMs = 0;
-    showText("RakshaWave", "monitoring");
+    showIdle();
   }
 
   delay(10);

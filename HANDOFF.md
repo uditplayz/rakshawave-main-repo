@@ -29,6 +29,26 @@ RakshaWave ("Smart Road Sentinel", team TechLads, SIH26220) is a vehicle-to-vehi
 
 `main` already contains the first commit of this work (PR #2 merged); later commits are only on the branch.
 
+## 2b. Hardware lab (added 2026-10-25, branch `udit-pc/gifted-knuth-rizr8y`)
+
+`hardware/lab/` replaces "show the physical device" for demos: several boards in one browser page, each running
+the real firmware compiled to WebAssembly (`hardware/lab/web/firmware.wasm`, committed), with register-level
+SX1278 / MPU-6050 / SSD1306 / GPS models, a physical 433 MHz channel and a 7-DOF car-and-road model. Open it at
+`/lab/` in the test bench GUI, or serve `hardware/lab/web/` with any static server. Full description,
+measurements and limits: `hardware/LAB.md`. Tests: `node --test hardware/lab/test/` (also via `tests/test_lab.py`).
+
+Firmware changes that came out of it (all in `firmware/esp32/main.ino`, **not yet compiled with PlatformIO**:
+the PlatformIO registry was unreachable, only the wasm build was checked):
+- ID from the MAC (`RW-xxxxxx`) instead of the fixed `VEH-ESP32-01`.
+- Standalone mesh relay: dedup, hop count, relative TTL decremented, slot backoff by RSSI, listen-before-talk,
+  cancel on hearing another relay. `LoRaNode` on the Pi no longer relays packets from a serial modem.
+- Radio parameters set explicitly, CRC on; continuous RX with DIO0 (IO8) polling instead of RX-single polling.
+- OLED shows a third line (RSSI, hop, sender).
+
+Findings to act on: the 1.8 g impact threshold never fires on potholes with the board on the dashboard (0.3–1.3 g);
+U6 MCP73123 is a LiFePO4 charger while the README says Li-ion. Rebuilding the wasm needs Zig (`pip install
+ziglang`) and Binaryen (`npm install binaryen`): `hardware/lab/hal/build.sh`.
+
 ## 3. Repo map
 
 ```

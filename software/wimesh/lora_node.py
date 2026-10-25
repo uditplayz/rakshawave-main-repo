@@ -119,6 +119,8 @@ class LoRaNode:
                 handler(packet)
 
         # Multi-hop relay: forward on only the first time we see it, and
-        # only if it still has hops/TTL budget left.
-        if first_time_seen and packet.can_relay():
+        # only if it still has hops/TTL budget left. A serial-attached ESP32
+        # modem relays on its own (firmware/esp32/main.ino), so the Pi must
+        # not send a second copy.
+        if first_time_seen and packet.can_relay() and self._serial is None:
             self.broadcast(packet.relayed())
